@@ -1,0 +1,271 @@
+
+
+2    flowchart flowchart
+2    flowchart_direction_lr LR
+3      lr LR
+2    flow_stmt_subgraph subgraph "Client"
+    A[Product Page] --> |HTTP Request| B((API Gateway))
+end
+3      subgraph subgraph
+3      flow_stmt_subgraph_inner A[Product Page] --> |HTTP Request| B((API Gateway))
+
+4        flow_stmt_vertice A[Product Page] --> |HTTP Request| B((API Gateway))
+5          flow_node A[Product Page]
+6            flow_vertex A[Product Page]
+7              flow_vertex_id A
+7              flow_vertex_square [Product Page]
+8                [ [
+8                flow_text_literal Product Page
+8                ] ]
+5          flow_link_arrowtext --> |HTTP Request|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text HTTP Request
+6            | |
+5          flow_node B((API Gateway))
+6            flow_vertex B((API Gateway))
+7              flow_vertex_id B
+7              flow_vertex_circle ((API Gateway))
+8                (( ((
+8                flow_text_literal API Gateway
+8                )) ))
+3      end end
+2    flow_stmt_subgraph subgraph "API Gateway"
+    B --> |HTTP Request| C((Item API))
+    B --> |HTTP Request| D((Reviews API))
+    B --> |HTTP Request| E((Recommendations API))
+    B --> |HTTP Request| F((Auth API))
+    B --> |HTTP Request| G((Search API))
+end
+3      subgraph subgraph
+3      flow_stmt_subgraph_inner B --> |HTTP Request| C((Item API))
+    B --> |HTTP Request| D((Reviews API))
+    B --> |HTTP Request| E((Recommendations API))
+    B --> |HTTP Request| F((Auth API))
+    B --> |HTTP Request| G((Search API))
+
+4        flow_stmt_vertice B --> |HTTP Request| C((Item API))
+5          flow_node B
+6            flow_vertex B
+7              flow_vertex_id B
+5          flow_link_arrowtext --> |HTTP Request|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text HTTP Request
+6            | |
+5          flow_node C((Item API))
+6            flow_vertex C((Item API))
+7              flow_vertex_id C
+7              flow_vertex_circle ((Item API))
+8                (( ((
+8                flow_text_literal Item API
+8                )) ))
+4        flow_stmt_vertice B --> |HTTP Request| D((Reviews API))
+5          flow_node B
+6            flow_vertex B
+7              flow_vertex_id B
+5          flow_link_arrowtext --> |HTTP Request|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text HTTP Request
+6            | |
+5          flow_node D((Reviews API))
+6            flow_vertex D((Reviews API))
+7              flow_vertex_id D
+7              flow_vertex_circle ((Reviews API))
+8                (( ((
+8                flow_text_literal Reviews API
+8                )) ))
+4        flow_stmt_vertice B --> |HTTP Request| E((Recommendations API))
+5          flow_node B
+6            flow_vertex B
+7              flow_vertex_id B
+5          flow_link_arrowtext --> |HTTP Request|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text HTTP Request
+6            | |
+5          flow_node E((Recommendations API))
+6            flow_vertex E((Recommendations API))
+7              flow_vertex_id E
+7              flow_vertex_circle ((Recommendations API))
+8                (( ((
+8                flow_text_literal Recommendations API
+8                )) ))
+4        flow_stmt_vertice B --> |HTTP Request| F((Auth API))
+5          flow_node B
+6            flow_vertex B
+7              flow_vertex_id B
+5          flow_link_arrowtext --> |HTTP Request|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text HTTP Request
+6            | |
+5          flow_node F((Auth API))
+6            flow_vertex F((Auth API))
+7              flow_vertex_id F
+7              flow_vertex_circle ((Auth API))
+8                (( ((
+8                flow_text_literal Auth API
+8                )) ))
+4        flow_stmt_vertice B --> |HTTP Request| G((Search API))
+5          flow_node B
+6            flow_vertex B
+7              flow_vertex_id B
+5          flow_link_arrowtext --> |HTTP Request|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text HTTP Request
+6            | |
+5          flow_node G((Search API))
+6            flow_vertex G((Search API))
+7              flow_vertex_id G
+7              flow_vertex_circle ((Search API))
+8                (( ((
+8                flow_text_literal Search API
+8                )) ))
+3      end end
+2    flow_stmt_subgraph subgraph "Microservices"
+    C --> |Database| H{Item API DB}
+    D --> |Database| I{Reviews API DB}
+    E --> |Database| J{Recommendations API DB}
+    F --> |Database| K{Auth API DB}
+    G --> |Database| L{Search API DB}
+end
+3      subgraph subgraph
+3      flow_stmt_subgraph_inner C --> |Database| H{Item API DB}
+    D --> |Database| I{Reviews API DB}
+    E --> |Database| J{Recommendations API DB}
+    F --> |Database| K{Auth API DB}
+    G --> |Database| L{Search API DB}
+
+4        flow_stmt_vertice C --> |Database| H{Item API DB}
+5          flow_node C
+6            flow_vertex C
+7              flow_vertex_id C
+5          flow_link_arrowtext --> |Database|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text Database
+6            | |
+5          flow_node H{Item API DB}
+6            flow_vertex H{Item API DB}
+7              flow_vertex_id H
+7              flow_vertex_diamond {Item API DB}
+8                { {
+8                flow_text_literal Item API DB
+8                } }
+4        flow_stmt_vertice D --> |Database| I{Reviews API DB}
+5          flow_node D
+6            flow_vertex D
+7              flow_vertex_id D
+5          flow_link_arrowtext --> |Database|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text Database
+6            | |
+5          flow_node I{Reviews API DB}
+6            flow_vertex I{Reviews API DB}
+7              flow_vertex_id I
+7              flow_vertex_diamond {Reviews API DB}
+8                { {
+8                flow_text_literal Reviews API DB
+8                } }
+4        flow_stmt_vertice E --> |Database| J{Recommendations API DB}
+5          flow_node E
+6            flow_vertex E
+7              flow_vertex_id E
+5          flow_link_arrowtext --> |Database|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text Database
+6            | |
+5          flow_node J{Recommendations API DB}
+6            flow_vertex J{Recommendations API DB}
+7              flow_vertex_id J
+7              flow_vertex_diamond {Recommendations API DB}
+8                { {
+8                flow_text_literal Recommendations API DB
+8                } }
+4        flow_stmt_vertice F --> |Database| K{Auth API DB}
+5          flow_node F
+6            flow_vertex F
+7              flow_vertex_id F
+5          flow_link_arrowtext --> |Database|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text Database
+6            | |
+5          flow_node K{Auth API DB}
+6            flow_vertex K{Auth API DB}
+7              flow_vertex_id K
+7              flow_vertex_diamond {Auth API DB}
+8                { {
+8                flow_text_literal Auth API DB
+8                } }
+4        flow_stmt_vertice G --> |Database| L{Search API DB}
+5          flow_node G
+6            flow_vertex G
+7              flow_vertex_id G
+5          flow_link_arrowtext --> |Database|
+6            flow_link_arrow -->
+6            | |
+6            flow_arrow_text Database
+6            | |
+5          flow_node L{Search API DB}
+6            flow_vertex L{Search API DB}
+7              flow_vertex_id L
+7              flow_vertex_diamond {Search API DB}
+8                { {
+8                flow_text_literal Search API DB
+8                } }
+3      end end
+2    flow_stmt_subgraph subgraph "Interactions"
+    D -.-> H
+    D -.-> G
+    E -.-> J
+    E -.-> G
+end
+3      subgraph subgraph
+3      flow_stmt_subgraph_inner D -.-> H
+    D -.-> G
+    E -.-> J
+    E -.-> G
+
+4        flow_stmt_vertice D -.-> H
+5          flow_node D
+6            flow_vertex D
+7              flow_vertex_id D
+5          flow_link_simplelink -.->
+6            flow_link_arrow -.->
+5          flow_node H
+6            flow_vertex H
+7              flow_vertex_id H
+4        flow_stmt_vertice D -.-> G
+5          flow_node D
+6            flow_vertex D
+7              flow_vertex_id D
+5          flow_link_simplelink -.->
+6            flow_link_arrow -.->
+5          flow_node G
+6            flow_vertex G
+7              flow_vertex_id G
+4        flow_stmt_vertice E -.-> J
+5          flow_node E
+6            flow_vertex E
+7              flow_vertex_id E
+5          flow_link_simplelink -.->
+6            flow_link_arrow -.->
+5          flow_node J
+6            flow_vertex J
+7              flow_vertex_id J
+4        flow_stmt_vertice E -.-> G
+5          flow_node E
+6            flow_vertex E
+7              flow_vertex_id E
+5          flow_link_simplelink -.->
+6            flow_link_arrow -.->
+5          flow_node G
+6            flow_vertex G
+7              flow_vertex_id G
+3      end end
