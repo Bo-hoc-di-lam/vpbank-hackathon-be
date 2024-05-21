@@ -18,3 +18,11 @@ func Load[T any]() (T, error) {
 	}
 	return cfg, nil
 }
+
+func MustLoad[T any]() T {
+	cfg, err := Load[T]()
+	if err != nil {
+		panic(err)
+	}
+	return cfg
+}

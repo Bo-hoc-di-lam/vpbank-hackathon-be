@@ -57,7 +57,7 @@ flowchart LR
 `
 
 func TestParse(t *testing.T) {
-	data := example2
+	data := example1
 
 	conf := zap.NewDevelopmentConfig()
 	conf.EncoderConfig.TimeKey = zapcore.OmitKey
@@ -68,10 +68,11 @@ func TestParse(t *testing.T) {
 
 	//datas := strings.Split(data, "\n")
 	ctx := context.Background()
-	p := NewParser()
+	p := NewParser(nil)
 	//for _, l := range datas {
 	//	p.Append(ctx, l)
 	//}
 	p.Append(ctx, data)
+	p.Flush(ctx)
 	fmt.Println("done")
 }

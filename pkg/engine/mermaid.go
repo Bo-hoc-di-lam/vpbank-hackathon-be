@@ -1,10 +1,12 @@
 package engine
 
 import (
+	"be/pkg/common"
+	"be/pkg/dto"
 	"be/pkg/parser/mermaid"
 	"be/pkg/util"
 	"context"
-	"fmt"
+	"github.com/olahol/melody"
 	sitter "github.com/smacker/go-tree-sitter"
 	"go.uber.org/zap"
 	"strings"
@@ -28,27 +30,52 @@ var VerticesShape = []string{
 	"flow_vertex_trapezoid",
 }
 
-type Parser struct {
-	p         *sitter.Parser
-	data      []byte
-	tree      *sitter.Tree
-	vertices  map[string]*Vertex
-	links     []*Link
-	subGraphs []*SubGraph
+type Data struct {
+	Vertices  map[string]*Vertex   `json:"vertices"`
+	Links     map[string]*Link     `json:"links"`
+	SubGraphs map[string]*SubGraph `json:"sub_graphs"`
 }
 
-func NewParser() *Parser {
-	p := sitter.NewParser()
-	p.SetLanguage(sitter.NewLanguage(mermaid.Language()))
-	return &Parser{
-		p:        p,
-		vertices: make(map[string]*Vertex),
+func EmptyData() *Data {
+	return &Data{
+		Vertices:  make(map[string]*Vertex),
+		Links:     make(map[string]*Link),
+		SubGraphs: make(map[string]*SubGraph),
 	}
 }
 
-func getFirstNodeWithType(root *sitter.Node, name string) *sitter.Node {
+type Parser struct {
+	session *melody.Session
+	p       *sitter.Parser
+	lineCnt int
+	data    []byte
+	tree    *sitter.Tree
+	oldData *Data
+	newData *Data
+}
+
+func GetParser(s *melody.Session) *Parser {
+	parser, exist := s.Get("parser")
+	if !exist {
+		parser = NewParser(s)
+		s.Set("parser", parser)
+	}
+	return parser.(*Parser)
+}
+
+func NewParser(s *melody.Session) *Parser {
+	p := sitter.NewParser()
+	p.SetLanguage(sitter.NewLanguage(mermaid.Language()))
+	return &Parser{
+		session: s,
+		p:       p,
+		oldData: EmptyData(),
+	}
+}
+
+func firstNode(root *sitter.Node, nodeType string) *sitter.Node {
 	for i := 0; i < int(root.NamedChildCount()); i++ {
-		if root.NamedChild(i).Type() == name {
+		if root.NamedChild(i).Type() == nodeType {
 			return root.NamedChild(i)
 		}
 	}
@@ -57,8 +84,8 @@ func getFirstNodeWithType(root *sitter.Node, name string) *sitter.Node {
 
 func (p *Parser) getLink(root *sitter.Node) *Link {
 	text := ""
-	arrow := getFirstNodeWithType(root, "flow_link_arrow").Content(p.data)
-	textNode := getFirstNodeWithType(root, "flow_arrow_text")
+	arrow := firstNode(root, "flow_link_arrow").Content(p.data)
+	textNode := firstNode(root, "flow_arrow_text")
 	if textNode != nil {
 		text = textNode.Content(p.data)
 	}
@@ -75,6 +102,7 @@ func (p *Parser) getSubgraph(root *sitter.Node) *SubGraph {
 	txt = strings.Trim(txt, "\"")
 	return &SubGraph{
 		Text: txt,
+		ID:   txt,
 	}
 }
 
@@ -86,11 +114,11 @@ func (p *Parser) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
 
 	shape := ""
 	text := ""
-	vertex := getFirstNodeWithType(root, "flow_vertex")
-	id := getFirstNodeWithType(vertex, "flow_vertex_id").Content(p.data)
+	vertex := firstNode(root, "flow_vertex")
+	id := firstNode(vertex, "flow_vertex_id").Content(p.data)
 
-	if p.vertices[id] != nil {
-		return p.vertices[id]
+	if p.newData.Vertices[id] != nil {
+		return p.newData.Vertices[id]
 	}
 	//get shape
 	for i := 0; i < int(vertex.ChildCount()); i++ {
@@ -99,7 +127,7 @@ func (p *Parser) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
 			shape = shapeNode.Type()
 			shape = strings.TrimPrefix(shape, "flow_vertex_")
 			// get text
-			textNode := getFirstNodeWithType(shapeNode, "flow_text_literal")
+			textNode := firstNode(shapeNode, "flow_text_literal")
 			if textNode != nil {
 				text = textNode.Content(p.data)
 			}
@@ -114,7 +142,7 @@ func (p *Parser) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
 		Text:     text,
 		SubGraph: subGraphTxt,
 	}
-	p.vertices[id] = data
+	p.newData.Vertices[id] = data
 	return data
 }
 
@@ -122,23 +150,18 @@ func (p *Parser) travel(subGraph *SubGraph, root *sitter.Node, level int) {
 	if root.Type() == "ERROR" {
 		return
 	}
-	fmt.Print(level)
-	for i := 0; i < level; i++ {
-		fmt.Print("  ")
-	}
-	if root.Type() != "source_file" {
-		//zap.S().Infoln(root.Type(), root.Content(p.data))
-		//fmt.Println(root.Type(), root.Content(raw))
-	}
 
 	switch root.Type() {
 	case "flow_stmt_subgraph":
 		pre := subGraph
 		subGraph = p.getSubgraph(root)
-		subGraph.Parent = pre
-		p.subGraphs = append(p.subGraphs, subGraph)
+		if pre != nil {
+			subGraph.Root = pre
+			subGraph.Parent = pre.Text
+		}
+		p.newData.SubGraphs[subGraph.Text] = subGraph
 	case "end":
-		subGraph = subGraph.Parent
+		subGraph = subGraph.Root
 	case "flow_stmt_vertice":
 		vertices := make([]*Vertex, 0)
 		links := make([]*Link, 0)
@@ -156,8 +179,11 @@ func (p *Parser) travel(subGraph *SubGraph, root *sitter.Node, level int) {
 		for i := 0; i < len(links); i++ {
 			links[i].FromID = vertices[i].ID
 			links[i].ToID = vertices[i+1].ID
+			links[i].ID = links[i].Key()
 		}
-		p.links = append(p.links, links...)
+		for i := 0; i < len(links); i++ {
+			p.newData.Links[links[i].Key()] = links[i]
+		}
 		return
 
 	}
@@ -167,19 +193,125 @@ func (p *Parser) travel(subGraph *SubGraph, root *sitter.Node, level int) {
 	}
 }
 
-func (p *Parser) Append(ctx context.Context, s string) {
-	p.data = append(p.data, []byte("\n")...)
-	p.data = append(p.data, []byte(s)...)
-	tree, err := p.p.ParseCtx(ctx, nil, []byte(p.data))
+func (p *Parser) CompareData() {
+	if p.session == nil {
+		return
+
+	}
+	// subgraph
+	for k, _ := range p.newData.SubGraphs {
+		if p.oldData.SubGraphs[k] == nil {
+			// emit new
+			util.SendMsg(p.session, dto.WSData{
+				Event: common.AddSubGraph,
+				Data:  p.newData.SubGraphs[k],
+			})
+		} else {
+			// not happen
+			//if v.Diff(*p.oldData.SubGraphs[k]) {
+			//	//emit change
+			//	util.SendMsg(p.session,)
+			//
+			//}
+		}
+	}
+	for k, _ := range p.oldData.SubGraphs {
+		if p.newData.SubGraphs[k] == nil {
+			//emit delete
+			util.SendMsg(p.session, dto.WSData{
+				Event: common.DelSubGraph,
+				Data:  p.oldData.SubGraphs[k],
+			})
+		}
+	}
+
+	// vertices
+	for k, v := range p.newData.Vertices {
+		if p.oldData.Vertices[k] == nil {
+			//emit new
+			util.SendMsg(p.session, dto.WSData{
+				Event: common.AddNode,
+				Data:  p.newData.Vertices[k],
+			})
+		} else {
+			if v.Diff(*p.oldData.Vertices[k]) {
+				//emit change
+				util.SendMsg(p.session, dto.WSData{
+					Event: common.ChangeNode,
+					Data:  p.newData.Vertices[k],
+				})
+			}
+		}
+	}
+	for k, _ := range p.oldData.Vertices {
+		if p.newData.Vertices[k] == nil {
+			//emit delete
+			util.SendMsg(p.session, dto.WSData{
+				Event: common.DelNode,
+				Data:  p.oldData.Vertices[k],
+			})
+		}
+	}
+
+	// link
+	for k, v := range p.newData.Links {
+		if p.oldData.Links[k] == nil {
+			//emit new
+			util.SendMsg(p.session, dto.WSData{
+				Event: common.AddLink,
+				Data:  p.newData.Links[k],
+			})
+
+		} else {
+			if v.Diff(*p.oldData.Links[k]) {
+				//emit change
+				util.SendMsg(p.session, dto.WSData{
+					Event: common.ChangeLink,
+					Data:  p.newData.Links[k],
+				})
+
+			}
+		}
+	}
+	for k, _ := range p.oldData.Links {
+		if p.newData.Links[k] == nil {
+			//emit delete
+			util.SendMsg(p.session, dto.WSData{
+				Event: common.DelLink,
+				Data:  p.oldData.Links[k],
+			})
+
+		}
+	}
+
+}
+
+func (p *Parser) Clear() {
+	p.lineCnt = 0
+	p.data = []byte{}
+}
+
+func (p *Parser) parse(ctx context.Context) {
+	p.newData = EmptyData()
+	tree, err := p.p.ParseCtx(ctx, nil, p.data)
 	if err != nil {
 		zap.S().Error("error when parse", "error", err)
 	}
 	p.tree = tree
-	fmt.Println("------------------")
-	fmt.Println("data: ")
-	fmt.Println(string(p.data))
-	fmt.Println("----output---")
 	p.travel(nil, p.tree.RootNode(), 0)
+	p.CompareData()
+	p.oldData = p.newData
+}
 
-	fmt.Print(p.tree.RootNode())
+func (p *Parser) Flush(ctx context.Context) {
+	p.parse(ctx)
+}
+
+func (p *Parser) Append(ctx context.Context, s string) {
+	//p.data = append(p.data, []byte("\n")...)
+	p.data = append(p.data, []byte(s)...)
+	p.lineCnt++
+	if p.lineCnt%10 == 0 {
+		p.parse(ctx)
+	}
 }

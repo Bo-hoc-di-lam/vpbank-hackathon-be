@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/samber/do"
 	"net/http"
 )
 
@@ -17,15 +18,19 @@ type adapter struct {
 	client *http.Client
 }
 
-func NewAdapter(conf config.AICore) Adapter {
+func NewAdapter(di *do.Injector) (Adapter, error) {
+	conf, err := do.Invoke[config.AICore](di)
+	if err != nil {
+		return nil, err
+	}
 	return &adapter{
 		conf:   conf,
 		client: &http.Client{},
-	}
+	}, nil
 }
 
 func (a *adapter) Prompt(data string) (Decoder, error) {
-	url := fmt.Sprint(a.conf.BaseURL, "/stream")
+	url := fmt.Sprint(a.conf.BaseURL, "/mock/stream")
 	body, err := json.Marshal(PromptDTO{Input: data})
 	if err != nil {
 		return nil, err

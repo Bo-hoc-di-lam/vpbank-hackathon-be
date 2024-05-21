@@ -2,8 +2,8 @@ package ai_core
 
 import (
 	"bufio"
+	"encoding/json"
 	"io"
-	"strconv"
 	"strings"
 )
 
@@ -35,18 +35,22 @@ func (d *decoder) ReadEvent() (*Event, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if len(line1) == 0 {
+		return d.ReadEvent()
+	}
 	event.Event = string(line1)
 	event.Event = strings.TrimPrefix(event.Event, "event: ")
-
+	if event.Event == "end" {
+		return nil, io.EOF
+	}
 	line2, err := d.Read()
 	if err != nil {
 		return nil, err
 	}
-	event.Data = string(line2)
-	event.Data = strings.TrimPrefix(event.Data, "data: ")
-	unquote, err := strconv.Unquote(event.Data)
-	if err == nil {
-		event.Data = unquote
+	dataStr := strings.TrimPrefix(string(line2), "data: ")
+	if err := json.Unmarshal([]byte(dataStr), &event.Data); err != nil {
+		return nil, err
 	}
 
 	_, err = d.Read()

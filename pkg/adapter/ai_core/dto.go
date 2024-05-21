@@ -6,5 +6,10 @@ type PromptDTO struct {
 
 type Event struct {
 	Event string `json:"event"`
-	Data  string `json:"data"`
+	Data  Data   `json:"data"`
+}
+
+type Data struct {
+	Output    string            `json:"output"`
+	Positions map[string][2]int `json:"positions"`
 }
