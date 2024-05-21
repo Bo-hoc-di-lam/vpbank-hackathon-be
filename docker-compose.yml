@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - .env:/app/.env
+    # depends_on:
+    #   mysql:
+    #     condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - bhdl
+
+networks:
+  bhdl:
+    driver: bridge
