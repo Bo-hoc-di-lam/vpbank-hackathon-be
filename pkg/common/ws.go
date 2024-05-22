@@ -20,4 +20,6 @@ const (
 
 	WSSetNodePosition WSEvent = "SET_NODE_POSITION"
 	WSPrompt          WSEvent = "PROMPT"
+
+	SetExplanation WSEvent = "SET_EXPLANATION"
 )
