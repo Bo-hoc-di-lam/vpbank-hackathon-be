@@ -53,6 +53,7 @@ type Parser struct {
 	oldData  *Data
 	newData  *Data
 	position map[string]Position
+	explain  strings.Builder
 }
 
 func GetParser(s *melody.Session) *Parser {
@@ -290,6 +291,7 @@ func (p *Parser) CompareData() {
 func (p *Parser) Clear() {
 	p.lineCnt = 0
 	p.data = []byte{}
+	p.explain.Reset()
 }
 
 func (p *Parser) parse(ctx context.Context) {
@@ -306,6 +308,10 @@ func (p *Parser) parse(ctx context.Context) {
 
 func (p *Parser) Flush(ctx context.Context) {
 	p.parse(ctx)
+	util.SendMsg(p.session, dto.WSData{
+		Event: common.SetExplanation,
+		Data:  p.explain.String(),
+	})
 }
 func (p *Parser) SetPosition(id string, x int, y int) {
 	node := p.oldData.Vertices[id]
@@ -320,6 +326,10 @@ func (p *Parser) SetPosition(id string, x int, y int) {
 			Data:  node,
 		})
 	}
+}
+
+func (p *Parser) AppendExplain(s string) {
+	p.explain.WriteString(s)
 }
 
 func (p *Parser) Append(ctx context.Context, s string) {

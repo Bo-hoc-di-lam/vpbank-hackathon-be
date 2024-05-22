@@ -2,6 +2,10 @@ package engine
 
 import "fmt"
 
+type Explanation struct {
+	Text string `json:"text"`
+}
+
 type Position struct {
 	X int `json:"x"`
 	Y int `json:"y"`
