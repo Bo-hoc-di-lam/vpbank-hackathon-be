@@ -10,7 +10,7 @@ type Event struct {
 }
 
 type Data struct {
-	Output      string            `json:"output"`
-	Positions   map[string][2]int `json:"positions"`
-	Explanation string            `json:"explanation"`
+	Output    string            `json:"output"`
+	Positions map[string][2]int `json:"positions"`
+	Comments  string            `json:"comments"`
 }

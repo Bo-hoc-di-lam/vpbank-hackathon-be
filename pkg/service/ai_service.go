@@ -87,7 +87,7 @@ func (a *aiService) HandlePrompt(s *melody.Session, prompt string) {
 		zap.S().Errorw("error when prompt", "id", id, "prompt", prompt, "error", err)
 		return
 	}
-	parser.Clear()
+	parser.Reset()
 	for {
 		event, err := stream.ReadEvent()
 		if errors.Is(err, io.EOF) {
@@ -108,6 +108,9 @@ func (a *aiService) HandlePrompt(s *melody.Session, prompt string) {
 				for k, v := range event.Data.Positions {
 					parser.SetPosition(k, v[0], v[1])
 				}
+			}
+			if event.Data.Comments != "" {
+				parser.AppendComment(event.Data.Comments)
 			}
 		}
 

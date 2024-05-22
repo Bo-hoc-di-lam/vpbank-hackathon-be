@@ -6,6 +6,9 @@ import (
 )
 
 func SendMsg[T any](s *melody.Session, data T) error {
+	if s == nil {
+		return nil
+	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err

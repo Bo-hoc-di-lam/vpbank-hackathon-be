@@ -56,8 +56,70 @@ flowchart LR
   B1 --> B2
 `
 
+var example3 = `
+graph TD
+    subgraph Client Side
+        A[User Browser]
+    end
+
+    subgraph API Gateway
+        B[API Gateway]
+    end
+
+    subgraph Microservices
+        C1[Item API]
+        C2[Reviews API]
+        C3[Recommendations API]
+        C4[Auth API]
+        C5[Search API]
+    end
+
+    subgraph Databases
+        D1[Item Database]
+        D2[Reviews Database]
+        D3[Recommendations Database]
+        D4[Auth Database]
+        D5[Search Database]
+    end
+    
+    subgraph AI Components
+        AI1[AI for Reviews]
+        AI2[AI for Recommendations]
+        AI3[AI for Search]
+    end
+
+    %% Client-side interaction
+    A --> B
+
+    %% API Gateway routing to microservices
+    B --> C1
+    B --> C2
+    B --> C3
+    B --> C4
+    B --> C5
+
+    %% Microservices to their respective databases
+    C1 --> D1
+    C2 --> D2
+    C3 --> D3
+    C4 --> D4
+    C5 --> D5
+
+    %% Inter-service communication
+    C2 --> C1
+    C3 --> C1
+    C3 --> C5
+    C5 --> C1
+
+    %% AI components interaction with respective services
+    C2 --> AI1
+    C3 --> AI2
+    C5 --> AI3
+`
+
 func TestParse(t *testing.T) {
-	data := example1
+	data := example3
+	DEBUG = true
 
 	conf := zap.NewDevelopmentConfig()
 	conf.EncoderConfig.TimeKey = zapcore.OmitKey
@@ -70,7 +132,7 @@ func TestParse(t *testing.T) {
 	ctx := context.Background()
 	p := NewParser(nil)
 	//for _, l := range datas {
-	//	p.Append(ctx, l)
+	//	parser.Append(ctx, l)
 	//}
 	p.Append(ctx, data)
 	p.Flush(ctx)
