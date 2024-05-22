@@ -3,11 +3,15 @@ package config
 import (
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
+	"os"
 )
 
 func init() {
-	if err := godotenv.Load(); err != nil {
-		panic(err)
+	_, err := os.Stat("./env")
+	if err == nil {
+		if err := godotenv.Load(); err != nil {
+			panic(err)
+		}
 	}
 }
 
