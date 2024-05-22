@@ -2,3 +2,4 @@
 .env
 .git
 bin/
+.github

@@ -13,5 +13,3 @@ RUN make build
 EXPOSE 8080
 
 CMD ["./bin/api"]
-
-
