@@ -18,8 +18,8 @@ const (
 	DelSubGraph    WSEvent = "DEL_SUB_GRAPH"
 	ChangeSubGraph WSEvent = "CHANGE_SUB_GRAPH"
 
-	WSSetNodePosition WSEvent = "SET_NODE_POSITION"
-	WSPrompt          WSEvent = "PROMPT"
+	SetNodePosition WSEvent = "SET_NODE_POSITION"
+	WSPrompt        WSEvent = "PROMPT"
 
-	SetExplanation WSEvent = "SET_EXPLANATION"
+	SetComment WSEvent = "SET_COMMENT"
 )

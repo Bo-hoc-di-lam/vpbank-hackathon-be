@@ -2857,20 +2857,41 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "ALIAS",
-          "content": {
-            "type": "TOKEN",
-            "content": {
-              "type": "PREC",
-              "value": 1,
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "ALIAS",
               "content": {
-                "type": "PATTERN",
-                "value": "[fF][lL][oO][wW][cC][hH][aA][rR][tT]"
-              }
+                "type": "TOKEN",
+                "content": {
+                  "type": "PREC",
+                  "value": 1,
+                  "content": {
+                    "type": "PATTERN",
+                    "value": "[fF][lL][oO][wW][cC][hH][aA][rR][tT]"
+                  }
+                }
+              },
+              "named": false,
+              "value": "flowchart"
+            },
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "TOKEN",
+                "content": {
+                  "type": "PREC",
+                  "value": 1,
+                  "content": {
+                    "type": "PATTERN",
+                    "value": "[gG][rR][aA][pP][hH]"
+                  }
+                }
+              },
+              "named": false,
+              "value": "graph"
             }
-          },
-          "named": false,
-          "value": "flowchart"
+          ]
         },
         {
           "type": "CHOICE",

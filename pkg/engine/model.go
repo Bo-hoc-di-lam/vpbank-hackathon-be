@@ -19,7 +19,7 @@ type Vertex struct {
 	Shape    string   `json:"shape"`
 }
 
-func (v Vertex) Diff(v2 Vertex) bool {
+func (v *Vertex) Diff(v2 *Vertex) bool {
 	return v.ID != v2.ID || v.Text != v2.Text || v.Shape != v2.Shape || v.SubGraph != v2.SubGraph
 }
 
@@ -31,11 +31,11 @@ type Link struct {
 	Type   string `json:"type"`
 }
 
-func (l Link) Key() string {
+func (l *Link) Key() string {
 	return fmt.Sprintf("[%s]%s[%s]", l.FromID, l.Type, l.ToID)
 }
 
-func (l Link) Diff(l2 Link) bool {
+func (l *Link) Diff(l2 *Link) bool {
 	return l.FromID != l2.FromID || l.ToID != l2.ToID || l.Text != l2.Text || l.Type != l2.Type
 }
 
@@ -46,6 +46,6 @@ type SubGraph struct {
 	Text   string    `json:"text"`
 }
 
-func (s SubGraph) Diff(s2 SubGraph) bool {
+func (s *SubGraph) Diff(s2 *SubGraph) bool {
 	return s.Parent != s2.Parent || s.Text != s2.Text
 }

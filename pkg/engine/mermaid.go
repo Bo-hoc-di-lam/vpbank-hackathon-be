@@ -6,29 +6,14 @@ import (
 	"be/pkg/parser/mermaid"
 	"be/pkg/util"
 	"context"
+	"fmt"
 	"github.com/olahol/melody"
 	sitter "github.com/smacker/go-tree-sitter"
 	"go.uber.org/zap"
 	"strings"
 )
 
-var VerticesShape = []string{
-	"flow_vertex_circle",
-	"flow_vertex_cylinder",
-	"flow_vertex_diamond",
-	"flow_vertex_ellipse",
-	"flow_vertex_hexagon",
-	"flow_vertex_inv_trapezoid",
-	"flow_vertex_leanleft",
-	"flow_vertex_leanright",
-	"flow_vertex_odd",
-	"flow_vertex_rect",
-	"flow_vertex_round",
-	"flow_vertex_square",
-	"flow_vertex_stadium",
-	"flow_vertex_subroutine",
-	"flow_vertex_trapezoid",
-}
+var DEBUG = false
 
 type Data struct {
 	Vertices  map[string]*Vertex   `json:"vertices"`
@@ -44,47 +29,125 @@ func EmptyData() *Data {
 	}
 }
 
-type Parser struct {
-	session  *melody.Session
-	p        *sitter.Parser
-	lineCnt  int
-	data     []byte
-	tree     *sitter.Tree
-	oldData  *Data
-	newData  *Data
-	position map[string]Position
-	explain  strings.Builder
+type MermaidEngine struct {
+	wsSession *melody.Session
+	parser    *sitter.Parser
+	tree      *sitter.Tree
+	oldData   *Data
+	newData   *Data
+	position  map[string]Position
+
+	bufferLineCnt int
+	data          []byte
+	explain       strings.Builder
 }
 
-func GetParser(s *melody.Session) *Parser {
-	parser, exist := s.Get("parser")
-	if !exist {
-		parser = NewParser(s)
-		s.Set("parser", parser)
-	}
-	return parser.(*Parser)
-}
-
-func NewParser(s *melody.Session) *Parser {
+func NewParser(s *melody.Session) *MermaidEngine {
 	p := sitter.NewParser()
 	p.SetLanguage(sitter.NewLanguage(mermaid.Language()))
-	return &Parser{
-		session: s,
-		p:       p,
-		oldData: EmptyData(),
+	return &MermaidEngine{
+		wsSession: s,
+		parser:    p,
+		oldData:   EmptyData(),
 	}
 }
 
-func firstNode(root *sitter.Node, nodeType string) *sitter.Node {
-	for i := 0; i < int(root.NamedChildCount()); i++ {
-		if root.NamedChild(i).Type() == nodeType {
-			return root.NamedChild(i)
+func (p *MermaidEngine) Reset() {
+	p.bufferLineCnt = 0
+	p.data = []byte{}
+	p.explain.Reset()
+}
+
+func (p *MermaidEngine) Push(event common.WSEvent, data any) {
+	err := util.SendMsg(p.wsSession, dto.WSData{
+		Event: event,
+		Data:  data,
+	})
+	if err != nil {
+		zap.S().Errorw("error when push", "error", err, "event", event, "data", data, "id", util.GetID(p.wsSession))
+	}
+}
+
+func (p *MermaidEngine) CompareData() {
+	if p.wsSession == nil {
+		return
+	}
+	// subgraph
+	{
+		mpNew, mpChange, _, mpDel := util.CmpMap(p.oldData.SubGraphs, p.newData.SubGraphs)
+		for _, v := range mpNew {
+			p.Push(common.AddSubGraph, v)
+		}
+		for _, v := range mpChange {
+			p.Push(common.ChangeSubGraph, v)
+		}
+		for _, v := range mpDel {
+			p.Push(common.DelSubGraph, v)
 		}
 	}
-	return nil
+
+	// vertices
+	{
+		mpNew, mpChange, _, mpDel := util.CmpMap(p.oldData.Vertices, p.newData.Vertices)
+		for _, v := range mpNew {
+			p.Push(common.AddNode, v)
+		}
+		for _, v := range mpChange {
+			p.Push(common.ChangeNode, v)
+		}
+		for _, v := range mpDel {
+			p.Push(common.DelNode, v)
+		}
+	}
+	// links
+	{
+		mpNew, mpChange, _, mpDel := util.CmpMap(p.oldData.Links, p.newData.Links)
+		for _, v := range mpNew {
+			p.Push(common.AddLink, v)
+		}
+		for _, v := range mpChange {
+			p.Push(common.ChangeLink, v)
+		}
+		for _, v := range mpDel {
+			p.Push(common.DelLink, v)
+		}
+	}
+
 }
 
-func (p *Parser) getLink(root *sitter.Node) *Link {
+func (p *MermaidEngine) Flush(ctx context.Context) {
+	if p.bufferLineCnt != 0 {
+		p.bufferLineCnt = 0
+		p.parse(ctx)
+	}
+	p.Push(common.SetComment, p.explain.String())
+}
+
+func (p *MermaidEngine) SetPosition(id string, x int, y int) {
+	node := p.oldData.Vertices[id]
+	if node == nil {
+		return
+	}
+	if node.Position.X != x || node.Position.Y != y {
+		node.Position.X = x
+		node.Position.Y = y
+		p.Push(common.SetNodePosition, node)
+	}
+}
+
+func (p *MermaidEngine) AppendComment(s string) {
+	p.explain.WriteString(s)
+}
+
+func (p *MermaidEngine) Append(ctx context.Context, s string) {
+	p.data = append(p.data, []byte(s)...)
+	p.bufferLineCnt++
+	if p.bufferLineCnt != 0 && p.bufferLineCnt%BufferFlushThreshold == 0 {
+		p.Flush(ctx)
+	}
+}
+
+func (p *MermaidEngine) getLink(root *sitter.Node) *Link {
 	text := ""
 	arrow := firstNode(root, "flow_link_arrow").Content(p.data)
 	textNode := firstNode(root, "flow_arrow_text")
@@ -97,7 +160,7 @@ func (p *Parser) getLink(root *sitter.Node) *Link {
 	}
 }
 
-func (p *Parser) getSubgraph(root *sitter.Node) *SubGraph {
+func (p *MermaidEngine) getSubgraph(root *sitter.Node) *SubGraph {
 	txt := root.Content(p.data)
 	txt = strings.Split(txt, "\n")[0]
 	txt = strings.TrimPrefix(txt, "subgraph ")
@@ -108,7 +171,7 @@ func (p *Parser) getSubgraph(root *sitter.Node) *SubGraph {
 	}
 }
 
-func (p *Parser) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
+func (p *MermaidEngine) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
 	subGraphTxt := ""
 	if subGraph != nil {
 		subGraphTxt = subGraph.Text
@@ -148,7 +211,28 @@ func (p *Parser) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
 	return data
 }
 
-func (p *Parser) travel(subGraph *SubGraph, root *sitter.Node, level int) {
+func (p *MermaidEngine) parse(ctx context.Context) {
+	p.newData = EmptyData()
+	tree, err := p.parser.ParseCtx(ctx, nil, p.data)
+	if err != nil {
+		zap.S().Error("error when parse", "error", err)
+	}
+	p.tree = tree
+	p.travel(nil, p.tree.RootNode(), 0)
+	p.CompareData()
+	p.oldData = p.newData
+}
+
+func (p *MermaidEngine) travel(subGraph *SubGraph, root *sitter.Node, level int) {
+
+	if DEBUG {
+		fmt.Print(level)
+		for i := 0; i < level; i++ {
+			fmt.Print("  ")
+		}
+		fmt.Println(root.Type(), root.Content(p.data))
+	}
+
 	if root.Type() == "ERROR" {
 		return
 	}
@@ -192,151 +276,5 @@ func (p *Parser) travel(subGraph *SubGraph, root *sitter.Node, level int) {
 
 	for i := 0; i < int(root.ChildCount()); i++ {
 		p.travel(subGraph, root.Child(i), level+1)
-	}
-}
-
-func (p *Parser) CompareData() {
-	if p.session == nil {
-		return
-
-	}
-	// subgraph
-	for k, _ := range p.newData.SubGraphs {
-		if p.oldData.SubGraphs[k] == nil {
-			// emit new
-			util.SendMsg(p.session, dto.WSData{
-				Event: common.AddSubGraph,
-				Data:  p.newData.SubGraphs[k],
-			})
-		} else {
-			// not happen
-			//if v.Diff(*p.oldData.SubGraphs[k]) {
-			//	//emit change
-			//	util.SendMsg(p.session,)
-			//
-			//}
-		}
-	}
-	for k, _ := range p.oldData.SubGraphs {
-		if p.newData.SubGraphs[k] == nil {
-			//emit delete
-			util.SendMsg(p.session, dto.WSData{
-				Event: common.DelSubGraph,
-				Data:  p.oldData.SubGraphs[k],
-			})
-		}
-	}
-
-	// vertices
-	for k, v := range p.newData.Vertices {
-		if p.oldData.Vertices[k] == nil {
-			//emit new
-			util.SendMsg(p.session, dto.WSData{
-				Event: common.AddNode,
-				Data:  p.newData.Vertices[k],
-			})
-		} else {
-			if v.Diff(*p.oldData.Vertices[k]) {
-				//emit change
-				util.SendMsg(p.session, dto.WSData{
-					Event: common.ChangeNode,
-					Data:  p.newData.Vertices[k],
-				})
-			}
-		}
-	}
-	for k, _ := range p.oldData.Vertices {
-		if p.newData.Vertices[k] == nil {
-			//emit delete
-			util.SendMsg(p.session, dto.WSData{
-				Event: common.DelNode,
-				Data:  p.oldData.Vertices[k],
-			})
-		}
-	}
-
-	// link
-	for k, v := range p.newData.Links {
-		if p.oldData.Links[k] == nil {
-			//emit new
-			util.SendMsg(p.session, dto.WSData{
-				Event: common.AddLink,
-				Data:  p.newData.Links[k],
-			})
-
-		} else {
-			if v.Diff(*p.oldData.Links[k]) {
-				//emit change
-				util.SendMsg(p.session, dto.WSData{
-					Event: common.ChangeLink,
-					Data:  p.newData.Links[k],
-				})
-
-			}
-		}
-	}
-	for k, _ := range p.oldData.Links {
-		if p.newData.Links[k] == nil {
-			//emit delete
-			util.SendMsg(p.session, dto.WSData{
-				Event: common.DelLink,
-				Data:  p.oldData.Links[k],
-			})
-
-		}
-	}
-
-}
-
-func (p *Parser) Clear() {
-	p.lineCnt = 0
-	p.data = []byte{}
-	p.explain.Reset()
-}
-
-func (p *Parser) parse(ctx context.Context) {
-	p.newData = EmptyData()
-	tree, err := p.p.ParseCtx(ctx, nil, p.data)
-	if err != nil {
-		zap.S().Error("error when parse", "error", err)
-	}
-	p.tree = tree
-	p.travel(nil, p.tree.RootNode(), 0)
-	p.CompareData()
-	p.oldData = p.newData
-}
-
-func (p *Parser) Flush(ctx context.Context) {
-	p.parse(ctx)
-	util.SendMsg(p.session, dto.WSData{
-		Event: common.SetExplanation,
-		Data:  p.explain.String(),
-	})
-}
-func (p *Parser) SetPosition(id string, x int, y int) {
-	node := p.oldData.Vertices[id]
-	if node == nil {
-		return
-	}
-	if node.Position.X != x || node.Position.Y != y {
-		node.Position.X = x
-		node.Position.Y = y
-		util.SendMsg(p.session, dto.WSData{
-			Event: common.WSSetNodePosition,
-			Data:  node,
-		})
-	}
-}
-
-func (p *Parser) AppendExplain(s string) {
-	p.explain.WriteString(s)
-}
-
-func (p *Parser) Append(ctx context.Context, s string) {
-	//p.data = append(p.data, []byte("\n")...)
-	p.data = append(p.data, []byte(s)...)
-	p.lineCnt++
-	if p.lineCnt%10 == 0 {
-		p.parse(ctx)
 	}
 }
