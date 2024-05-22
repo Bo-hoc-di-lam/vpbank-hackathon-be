@@ -30,7 +30,7 @@ func NewAdapter(di *do.Injector) (Adapter, error) {
 }
 
 func (a *adapter) Prompt(data string) (Decoder, error) {
-	url := fmt.Sprint(a.conf.BaseURL, "/mock/stream")
+	url := fmt.Sprint(a.conf.BaseURL, a.conf.PromptEndpoint)
 	body, err := json.Marshal(PromptDTO{Input: data})
 	if err != nil {
 		return nil, err
