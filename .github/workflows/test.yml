@@ -7,6 +7,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Build
-        run: docker build -f docker/test/Dockerfile -t be-test
+        run: docker build -f docker/test/Dockerfile -t be-test .
       - name: Test
         run: docker run be-test
