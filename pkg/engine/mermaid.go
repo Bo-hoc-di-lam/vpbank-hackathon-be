@@ -45,13 +45,14 @@ func EmptyData() *Data {
 }
 
 type Parser struct {
-	session *melody.Session
-	p       *sitter.Parser
-	lineCnt int
-	data    []byte
-	tree    *sitter.Tree
-	oldData *Data
-	newData *Data
+	session  *melody.Session
+	p        *sitter.Parser
+	lineCnt  int
+	data     []byte
+	tree     *sitter.Tree
+	oldData  *Data
+	newData  *Data
+	position map[string]Position
 }
 
 func GetParser(s *melody.Session) *Parser {
@@ -305,6 +306,20 @@ func (p *Parser) parse(ctx context.Context) {
 
 func (p *Parser) Flush(ctx context.Context) {
 	p.parse(ctx)
+}
+func (p *Parser) SetPosition(id string, x int, y int) {
+	node := p.oldData.Vertices[id]
+	if node == nil {
+		return
+	}
+	if node.Position.X != x || node.Position.Y != y {
+		node.Position.X = x
+		node.Position.Y = y
+		util.SendMsg(p.session, dto.WSData{
+			Event: common.WSSetNodePosition,
+			Data:  node,
+		})
+	}
 }
 
 func (p *Parser) Append(ctx context.Context, s string) {

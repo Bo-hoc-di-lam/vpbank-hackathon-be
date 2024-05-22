@@ -100,9 +100,17 @@ func (a *aiService) HandlePrompt(s *melody.Session, prompt string) {
 		if event.Event == "end" {
 			break
 		}
-		if event.Event == "data" && event.Data.Output != "" {
-			parser.Append(ctx, event.Data.Output)
+		if event.Event == "data" {
+			if event.Data.Output != "" {
+				parser.Append(ctx, event.Data.Output)
+			}
+			if event.Data.Positions != nil {
+				for k, v := range event.Data.Positions {
+					parser.SetPosition(k, v[0], v[1])
+				}
+			}
 		}
+
 	}
 	parser.Flush(ctx)
 
