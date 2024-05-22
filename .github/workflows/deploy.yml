@@ -15,6 +15,6 @@ jobs:
         env:
           AI_CORE_BASE_URL: ${{ vars.ai_core_base_url }}
           AI_CORE_PROMPT_ENDPOINT: ${{ vars.ai_core_prompt_endpoint }}
-        run: docker run -e AI_CORE_BASE_URL -e AI_CORE_PROMPT_ENDPOINT be-app
+        run: docker run -d -e AI_CORE_BASE_URL -e AI_CORE_PROMPT_ENDPOINT be-app
 
 
