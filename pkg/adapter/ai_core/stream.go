@@ -10,7 +10,7 @@ import (
 type Decoder interface {
 	io.Closer
 	Read() ([]byte, error)
-	ReadEvent() (*Event, error)
+	Next() (*Event, error)
 }
 
 type decoder struct {
@@ -29,7 +29,7 @@ func (d *decoder) Close() error {
 	return d.originStream.Close()
 }
 
-func (d *decoder) ReadEvent() (*Event, error) {
+func (d *decoder) Next() (*Event, error) {
 	var event Event
 	line1, err := d.Read()
 	if err != nil {
@@ -37,7 +37,7 @@ func (d *decoder) ReadEvent() (*Event, error) {
 	}
 
 	if len(line1) == 0 {
-		return d.ReadEvent()
+		return d.Next()
 	}
 	event.Event = string(line1)
 	event.Event = strings.TrimPrefix(event.Event, "event: ")

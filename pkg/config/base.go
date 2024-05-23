@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	_, err := os.Stat("./env")
+	_, err := os.Stat("./.env")
 	if err == nil {
 		if err := godotenv.Load(); err != nil {
 			panic(err)

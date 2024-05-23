@@ -130,7 +130,7 @@ func TestParse(t *testing.T) {
 
 	//datas := strings.Split(data, "\n")
 	ctx := context.Background()
-	p := NewParser(nil)
+	p := NewRoom("test")
 	//for _, l := range datas {
 	//	parser.Append(ctx, l)
 	//}
