@@ -57,11 +57,10 @@ func main() {
 		}
 		return nil
 	})
-	s, err := service.NewAIService(di)
+	s, err := service.NewReceptionist(di)
 	if err != nil {
 		panic(err)
 	}
-	s.Handle()
-
+	s.Work()
 	e.Logger.Fatal(e.Start(":" + do.MustInvoke[config.Server](di).Port))
 }

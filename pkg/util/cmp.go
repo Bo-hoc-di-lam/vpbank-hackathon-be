@@ -1,10 +1,10 @@
 package util
 
-type Differ[T any] interface {
+type Comparable[T any] interface {
 	Diff(T) bool
 }
 
-func CmpMap[K comparable, V Differ[V]](oldData map[K]V, newData map[K]V) (mpNew, mpChange, mpKeep, mpRem map[K]V) {
+func CmpMap[K comparable, V Comparable[V]](oldData map[K]V, newData map[K]V) (mpNew, mpChange, mpKeep, mpRem map[K]V) {
 	mpRem = make(map[K]V)
 	mpNew = make(map[K]V)
 	mpChange = make(map[K]V)
