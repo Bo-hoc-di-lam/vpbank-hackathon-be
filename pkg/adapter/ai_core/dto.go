@@ -4,6 +4,17 @@ type PromptDTO struct {
 	Input string `json:"input"`
 }
 
+type EditDTO struct {
+	Input      string     `json:"input"`
+	OldDiagram string     `json:"old_diagram"`
+	EditNodes  []EditNode `json:"edit_nodes"`
+}
+
+type EditNode struct {
+	NodeID string `json:"node_id"`
+	Tittle string `json:"tittle"`
+}
+
 type Event struct {
 	Event string `json:"event"`
 	Data  Data   `json:"data"`

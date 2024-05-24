@@ -191,6 +191,10 @@ func (r *Room) AppendComment(s string) {
 	r.explain.WriteString(s)
 }
 
+func (r *Room) CurrentPrompt() string {
+	return string(r.data)
+}
+
 func (r *Room) Append(ctx context.Context, s string) {
 	r.data = append(r.data, []byte(s)...)
 	r.bufferLineCnt++
