@@ -35,6 +35,7 @@ type DataSet struct {
 }
 
 type System struct {
+	Terraform strings.Builder `json:"terraform"`
 	Name      string
 	Tree      *sitter.Tree
 	Content   []byte
@@ -133,7 +134,7 @@ func (r *Room) Join(s *melody.Session) {
 		}
 		r.forceSend(system.Name, s, ws.SetComment, system.Comment.String())
 	}
-	r.forceSend("", s, ws.Mermaid, r.CurrentPrompt())
+	r.forceSend("", s, ws.Mermaid, r.CurrentDiagram(""))
 }
 
 func (r *Room) forceSend(ds string, s *melody.Session, event ws.Event, data any) {
@@ -150,6 +151,14 @@ func (r *Room) broadCast(ds string, event ws.Event, data any) {
 }
 
 // parser logic
+
+func (r *Room) ResetTerraform(ds string) {
+	r.Lock()
+	defer r.Unlock()
+	system := r.System(ds)
+	system.Terraform.Reset()
+	system.BufferCnt = 0
+}
 
 func (r *Room) Reset(ds string) {
 	r.Lock()
@@ -228,13 +237,22 @@ func (r *Room) SetNodePosition(ds string, id string, x int, y int) {
 	}
 }
 
-func (r *Room) AppendComment(ds string, s string) {
+func (r *Room) AppendComment(ds, s string) {
 	system := r.System(ds)
 	system.Comment.WriteString(s)
 }
 
-func (r *Room) CurrentPrompt() string {
-	system := r.System("")
+func (r *Room) AppendTerraform(ds, s string) {
+	system := r.System(ds)
+	system.Terraform.WriteString(s)
+	system.BufferCnt++
+	if system.BufferCnt != 0 && system.BufferCnt%BufferFlushThreshold == 0 {
+		r.FlushTerraform(ds)
+	}
+}
+
+func (r *Room) CurrentDiagram(ds string) string {
+	system := r.System(ds)
 	return string(system.Content)
 }
 
@@ -331,6 +349,14 @@ func (r *Room) Flush(ctx context.Context, ds string) {
 		r.parse(ctx, system)
 	}
 	r.broadCast(ds, ws.SetComment, system.Comment.String())
+}
+
+func (r *Room) FlushTerraform(ds string) {
+	system := r.System(ds)
+	if system.BufferCnt != 0 {
+		system.BufferCnt = 0
+	}
+	r.broadCast(ds, ws.SetTerraform, system.Terraform.String())
 }
 
 func (r *Room) travel(system *System, subGraph *SubGraph, root *sitter.Node, level int) {

@@ -57,6 +57,16 @@ func main() {
 		}
 		return nil
 	})
+	e.GET("/room/:nameplate/ws", func(c echo.Context) error {
+		err := m.HandleRequestWithKeys(c.Response(), c.Request(),
+			map[string]any{
+				"nameplate": c.Param("nameplate"),
+			})
+		if err != nil {
+			zap.S().Errorw("error when handle ws request", "error", err)
+		}
+		return nil
+	})
 	s, err := service.NewReceptionist(di)
 	if err != nil {
 		panic(err)

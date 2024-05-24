@@ -7,12 +7,11 @@ import (
 	"be/pkg/util"
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/google/uuid"
 	"github.com/olahol/melody"
 	"github.com/samber/do"
 	"go.uber.org/zap"
-	"io"
+	"time"
 )
 
 type Receptionist interface {
@@ -45,14 +44,28 @@ func NewReceptionist(di *do.Injector) (Receptionist, error) {
 
 func (r *receptionist) Work() {
 	r.ws.HandleConnect(func(s *melody.Session) {
+		nameplate, _ := s.Keys["nameplate"].(string)
+
 		// generate uid
 		uid := uuid.NewString()
 		ws.SetUID(s, uid)
 		zap.S().Infow("user joined", "uid", uid)
+		// join room
+		if nameplate != "" {
+			room, err := r.office.GetRoom(nameplate)
+			if err != nil {
+				zap.S().Errorw("error when get room", "nameplate", nameplate, "error", err)
+				s.Close()
+				return
+			}
+			room.Join(s)
+			return
+		}
 		// create room
 		room, err := r.office.CreateRoom()
 		if err != nil {
 			zap.S().Errorw("error when create room", "error", err)
+			s.Close()
 			return
 		}
 		room.Join(s)
@@ -86,7 +99,11 @@ func (r *receptionist) Work() {
 		defer func() {
 			room.BroadCast(ws.Done, data)
 		}()
+		now := time.Now()
 		zap.S().Infow("user asked", "uid", uid, "data", data)
+		defer func() {
+			zap.S().Infow("user received response", "uid", uid, "tooks", time.Now().Sub(now).String(), "data", data)
+		}()
 		switch data.Event {
 		case ws.Prompt:
 			dto, err := util.AnyToStruct[ws.PromptDTO](data.Data)
@@ -97,15 +114,24 @@ func (r *receptionist) Work() {
 			}
 			zap.S().Infow("use asked to prompt", "uid", uid, "prompt", dto.Input)
 			r.HandleQuestion(s, dto.Input)
+		case ws.GenCode:
+			dto, err := util.AnyToStruct[ws.SystemTypeDTO](data.Data)
+			if err != nil {
+				zap.S().Errorw("error when parse dto", "error", err, "data", data)
+				ws.ForceSend(s, ws.Error, err.Error())
+				return
+			}
+			zap.S().Infow("user asked to generate code", "uid", uid, "type", dto.Type)
+			r.HandleGenerateCode(dto.Type, s)
 		case ws.GenIcon:
-			dto, err := util.AnyToStruct[ws.GenIconDTO](data.Data)
+			dto, err := util.AnyToStruct[ws.SystemTypeDTO](data.Data)
 			if err != nil {
 				zap.S().Errorw("error when parse dto", "error", err, "data", data)
 				ws.ForceSend(s, ws.Error, err.Error())
 				return
 			}
 			zap.S().Infow("user asked to generate icon", "uid", uid, "type", dto.Type)
-			r.HandleGenIcon(dto.Type, s, ws.PromptDTO{})
+			r.HandleGenIcon(dto.Type, s)
 		case ws.PromptEdit:
 			dto, err := util.AnyToStruct[ws.PromptDTO](data.Data)
 			if err != nil {
@@ -127,6 +153,35 @@ func (r *receptionist) Work() {
 	})
 }
 
+func (r *receptionist) HandleGenerateCode(ds string, s *melody.Session) {
+	uid := ws.GetUID(s)
+	room, err := r.office.GetRoomForUser(s)
+	if err != nil {
+		zap.S().Errorw("error when get room", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	diagram := room.CurrentDiagram(ds)
+	stream, err := r.ai.GenCode(diagram)
+	if err != nil {
+		zap.S().Errorw("error when gen code", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	defer stream.Close()
+	room.ResetTerraform(ds)
+	room.Lock()
+	defer room.Unlock()
+	stream.Each(func(data ai_core.Data) error {
+		if data.Output != "" {
+			room.AppendTerraform(ds, data.Output)
+		}
+		return nil
+	})
+	room.FlushTerraform(ds)
+
+}
+
 func (r *receptionist) HandleJoinRoom(s *melody.Session, nameplate string) {
 	room, err := r.office.GetRoom(nameplate)
 	if err != nil {
@@ -137,7 +192,7 @@ func (r *receptionist) HandleJoinRoom(s *melody.Session, nameplate string) {
 	room.Join(s)
 }
 
-func (r *receptionist) HandleGenIcon(ds string, s *melody.Session, data ws.PromptDTO) {
+func (r *receptionist) HandleGenIcon(ds string, s *melody.Session) {
 	ctx := context.Background()
 	uid := ws.GetUID(s)
 	room, err := r.office.GetRoomForUser(s)
@@ -146,8 +201,8 @@ func (r *receptionist) HandleGenIcon(ds string, s *melody.Session, data ws.Promp
 		ws.ForceSend(s, ws.Error, err.Error())
 		return
 	}
-	currentPrompt := room.CurrentPrompt()
-	stream, err := r.ai.GenIcon(ds, currentPrompt)
+	diagram := room.CurrentDiagram("")
+	stream, err := r.ai.GenIcon(ds, diagram)
 	if err != nil {
 		zap.S().Errorw("error when gen icon", "uid", uid, "error", err)
 		ws.ForceSend(s, ws.Error, err.Error())
@@ -157,33 +212,20 @@ func (r *receptionist) HandleGenIcon(ds string, s *melody.Session, data ws.Promp
 	room.Reset(ds)
 	room.Lock()
 	defer room.Unlock()
-	for {
-		event, err := stream.Next()
-		if errors.Is(err, io.EOF) {
-			break
+	stream.Each(func(data ai_core.Data) error {
+		if data.Output != "" {
+			room.Append(ctx, ds, data.Output)
 		}
-		if err != nil {
-			zap.S().Errorw("error when read event", "uid", uid, "error", err)
-			ws.ForceSend(s, ws.Error, err.Error())
-			break
-		}
-		if event.Event == "end" {
-			break
-		}
-		if event.Event == "data" {
-			if event.Data.Output != "" {
-				room.Append(ctx, ds, event.Data.Output)
-			}
-			if event.Data.Positions != nil {
-				for k, v := range event.Data.Positions {
-					room.SetNodePosition(ds, k, v[0], v[1])
-				}
-			}
-			if event.Data.Comments != "" {
-				room.AppendComment(ds, event.Data.Comments)
+		if len(data.Positions) > 0 {
+			for k, v := range data.Positions {
+				room.SetNodePosition(ds, k, v[0], v[1])
 			}
 		}
-	}
+		if data.Comments != "" {
+			room.AppendComment(ds, data.Comments)
+		}
+		return nil
+	})
 	room.Flush(ctx, ds)
 }
 
@@ -196,8 +238,8 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 		ws.ForceSend(s, ws.Error, err.Error())
 		return
 	}
-	currentPrompt := room.CurrentPrompt()
-	stream, err := r.ai.Edit(data.Input, currentPrompt, data.EditNodes)
+	diagram := room.CurrentDiagram("")
+	stream, err := r.ai.Edit(data.Input, diagram, data.EditNodes)
 	if err != nil {
 		zap.S().Errorw("error when edit", "uid", uid, "error", err)
 		ws.ForceSend(s, ws.Error, err.Error())
@@ -206,35 +248,22 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 	defer stream.Close()
 	room.Reset("")
 	room.Lock()
-	defer func() { room.BroadCast(ws.Mermaid, room.CurrentPrompt()) }()
+	defer func() { room.BroadCast(ws.Mermaid, room.CurrentDiagram("")) }()
 	defer room.Unlock()
-	for {
-		event, err := stream.Next()
-		if errors.Is(err, io.EOF) {
-			break
+	stream.Each(func(data ai_core.Data) error {
+		if data.Output != "" {
+			room.Append(ctx, "", data.Output)
 		}
-		if err != nil {
-			zap.S().Errorw("error when read event", "uid", uid, "error", err)
-			ws.ForceSend(s, ws.Error, err.Error())
-			break
-		}
-		if event.Event == "end" {
-			break
-		}
-		if event.Event == "data" {
-			if event.Data.Output != "" {
-				room.Append(ctx, "", event.Data.Output)
-			}
-			if event.Data.Positions != nil {
-				for k, v := range event.Data.Positions {
-					room.SetNodePosition("", k, v[0], v[1])
-				}
-			}
-			if event.Data.Comments != "" {
-				room.AppendComment("", event.Data.Comments)
+		if len(data.Positions) > 0 {
+			for k, v := range data.Positions {
+				room.SetNodePosition("", k, v[0], v[1])
 			}
 		}
-	}
+		if data.Comments != "" {
+			room.AppendComment("", data.Comments)
+		}
+		return nil
+	})
 	room.Flush(ctx, "")
 }
 
@@ -255,35 +284,21 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 	defer stream.Close()
 	room.Reset("")
 	room.Lock()
-	defer func() { room.BroadCast(ws.Mermaid, room.CurrentPrompt()) }()
+	defer func() { room.BroadCast(ws.Mermaid, room.CurrentDiagram("")) }()
 	defer room.Unlock()
-	for {
-		event, err := stream.Next()
-		if errors.Is(err, io.EOF) {
-			break
+	stream.Each(func(data ai_core.Data) error {
+		if data.Output != "" {
+			room.Append(ctx, "", data.Output)
 		}
-		if err != nil {
-			zap.S().Errorw("error when read event", "uid", uid, "error", err)
-			ws.ForceSend(s, ws.Error, err.Error())
-			break
-		}
-		if event.Event == "end" {
-			break
-		}
-		if event.Event == "data" {
-			if event.Data.Output != "" {
-				room.Append(ctx, "", event.Data.Output)
-			}
-			if event.Data.Positions != nil {
-				for k, v := range event.Data.Positions {
-					room.SetNodePosition("", k, v[0], v[1])
-				}
-			}
-			if event.Data.Comments != "" {
-				room.AppendComment("", event.Data.Comments)
+		if len(data.Positions) > 0 {
+			for k, v := range data.Positions {
+				room.SetNodePosition("", k, v[0], v[1])
 			}
 		}
-
-	}
+		if data.Comments != "" {
+			room.AppendComment("", data.Comments)
+		}
+		return nil
+	})
 	room.Flush(ctx, "")
 }
