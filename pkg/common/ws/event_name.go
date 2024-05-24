@@ -3,10 +3,11 @@ package ws
 type Event string
 
 const (
-	Error    Event = "ERROR"
-	RoomInfo Event = "ROOM_INFO"
-	Prompt   Event = "PROMPT"
-	JoinRoom Event = "JOIN_ROOM"
+	Error      Event = "ERROR"
+	RoomInfo   Event = "ROOM_INFO"
+	Prompt     Event = "PROMPT"
+	PromptEdit Event = "PROMPT_EDIT"
+	JoinRoom   Event = "JOIN_ROOM"
 
 	AddNode    Event = "ADD_NODE"
 	DelNode    Event = "DEL_NODE"

@@ -4,6 +4,7 @@ import (
 	"be/pkg/adapter/ai_core"
 	"be/pkg/common/ws"
 	"be/pkg/engine"
+	"be/pkg/util"
 	"context"
 	"encoding/json"
 	"errors"
@@ -71,11 +72,24 @@ func (r *receptionist) Work() {
 		zap.S().Infow("user asked", "uid", uid, "data", data)
 		switch data.Event {
 		case ws.Prompt:
-			prompt, ok := data.Data.(string)
-			if !ok {
-				ws.ForceSend(s, ws.Error, "invalid prompt")
+			dto, err := util.AnyToStruct[ws.PromptDTO](data.Data)
+			if err != nil {
+				zap.S().Errorw("error when parse dto", "error", err, "data", data)
+				ws.ForceSend(s, ws.Error, err.Error())
+				return
 			}
-			r.HandleQuestion(s, prompt)
+			zap.S().Infow("use asked to prompt", "uid", uid, "prompt", dto.Input)
+			r.HandleQuestion(s, dto.Input)
+		case ws.PromptEdit:
+			dto, err := util.AnyToStruct[ws.PromptDTO](data.Data)
+			if err != nil {
+				zap.S().Errorw("error when parse dto", "error", err, "data", data)
+				ws.ForceSend(s, ws.Error, err.Error())
+				return
+			}
+			zap.S().Infow("user asked to edit diagram", "uid", uid, "data", dto)
+			r.HandlePromptEdit(s, dto)
+
 		case ws.JoinRoom:
 			nameplate, ok := data.Data.(string)
 			if !ok {
@@ -97,6 +111,56 @@ func (r *receptionist) HandleJoinRoom(s *melody.Session, nameplate string) {
 	room.Join(s)
 }
 
+func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
+	ctx := context.Background()
+	uid := ws.GetUID(s)
+	room, err := r.office.GetRoomForUser(s)
+	if err != nil {
+		zap.S().Errorw("error when get room", "error", err, "uid", uid)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	currentPrompt := room.CurrentPrompt()
+	stream, err := r.ai.Edit(data.Input, currentPrompt, data.EditNodes)
+	if err != nil {
+		zap.S().Errorw("error when edit", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	defer stream.Close()
+	room.Reset()
+	room.Lock()
+	defer room.Unlock()
+	for {
+		event, err := stream.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			zap.S().Errorw("error when read event", "uid", uid, "error", err)
+			ws.ForceSend(s, ws.Error, err.Error())
+			break
+		}
+		if event.Event == "end" {
+			break
+		}
+		if event.Event == "data" {
+			if event.Data.Output != "" {
+				room.Append(ctx, event.Data.Output)
+			}
+			if event.Data.Positions != nil {
+				for k, v := range event.Data.Positions {
+					room.SetNodePosition(k, v[0], v[1])
+				}
+			}
+			if event.Data.Comments != "" {
+				room.AppendComment(event.Data.Comments)
+			}
+		}
+	}
+	room.Flush(ctx)
+}
+
 func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 	ctx := context.Background()
 	uid := ws.GetUID(s)
@@ -108,10 +172,13 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 	stream, err := r.ai.Prompt(prompt)
 	if err != nil {
 		zap.S().Errorw("error when prompt", "uid", uid, "prompt", prompt, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
 		return
 	}
+	defer stream.Close()
 	room.Reset()
 	room.Lock()
+	defer room.Unlock()
 	for {
 		event, err := stream.Next()
 		if errors.Is(err, io.EOF) {
@@ -141,5 +208,4 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 
 	}
 	room.Flush(ctx)
-	room.Unlock()
 }
