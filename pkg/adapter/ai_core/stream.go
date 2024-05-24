@@ -3,6 +3,7 @@ package ai_core
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"go.uber.org/zap"
 	"io"
 	"strings"
@@ -12,6 +13,7 @@ type Decoder interface {
 	io.Closer
 	Read() ([]byte, error)
 	Next() (*Event, error)
+	Each(fn func(data Data) error) error
 }
 
 type decoder struct {
@@ -68,4 +70,25 @@ func (d *decoder) Next() (*Event, error) {
 func (d *decoder) Read() ([]byte, error) {
 	buf, _, err := d.stream.ReadLine()
 	return buf, err
+}
+
+func (d *decoder) Each(fn func(data Data) error) error {
+	for {
+		event, err := d.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			zap.S().Errorw("error when read event", "error", err)
+			return err
+		}
+		if event.Event == "end" {
+			return nil
+		}
+		if event.Event == "data" {
+			if err := fn(event.Data); err != nil {
+				return err
+			}
+		}
+	}
 }

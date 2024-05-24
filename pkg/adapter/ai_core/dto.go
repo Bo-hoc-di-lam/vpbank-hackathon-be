@@ -33,3 +33,7 @@ type Data struct {
 type InputWrap[T any] struct {
 	Input T `json:"input"`
 }
+
+type GenCodeDTO struct {
+	AWSDiagram string `json:"aws_diagram"`
+}

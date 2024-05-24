@@ -14,6 +14,7 @@ type Adapter interface {
 	Prompt(data string) (Decoder, error)
 	Edit(prompt string, oldData string, editNode []EditNode) (Decoder, error)
 	GenIcon(ds, diagram string) (Decoder, error)
+	GenCode(mermaid string) (Decoder, error)
 }
 
 type adapter struct {
@@ -30,6 +31,30 @@ func NewAdapter(di *do.Injector) (Adapter, error) {
 		conf:   conf,
 		client: &http.Client{},
 	}, nil
+}
+
+func (a *adapter) GenCode(mermaid string) (Decoder, error) {
+	url := fmt.Sprint(a.conf.BaseURL, a.conf.GenCodeEndpoint)
+	body, err := json.Marshal(InputWrap[GenCodeDTO]{
+		GenCodeDTO{
+			AWSDiagram: mermaid,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status code %d", resp.StatusCode)
+	}
+	return NewDecoder(resp.Body), nil
 }
 
 func (a *adapter) GenIcon(ds string, diagram string) (Decoder, error) {
