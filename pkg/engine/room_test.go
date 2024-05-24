@@ -117,8 +117,39 @@ graph TD
     C5 --> AI3
 `
 
+const example4 = `
+flowchart LR
+
+subgraph "Client"
+    A[Product Page] --> |HTTP Request| B[AWS API Gateway: API Gateway]
+end
+
+subgraph "API Gateway"
+    B --> |HTTP Request| C[AWS Lambda: Item API]
+    B --> |HTTP Request| D[AWS Lambda: Reviews API]
+    B --> |HTTP Request| E[AWS Lambda: Recommendations API]
+    B --> |HTTP Request| F[AWS Lambda: Auth API]
+    B --> |HTTP Request| G[AWS Lambda: Search API]
+end
+
+subgraph "Microservices"
+    C --> |Database| H[AWS DynamoDB: Item API DB]
+    D --> |Database| I[AWS DynamoDB: Reviews API DB]
+    E --> |Database| J[AWS DynamoDB: Recommendations API DB]
+    F --> |Database| K[AWS DynamoDB: Auth API DB]
+    G --> |Database| L[AWS DynamoDB: Search API DB]
+end
+
+subgraph "Interactions"
+    D -.-> H
+    D -.-> G
+    E -.-> J
+    E -.-> G
+end
+`
+
 func TestParse(t *testing.T) {
-	data := example3
+	data := example4
 	DEBUG = true
 
 	conf := zap.NewDevelopmentConfig()
@@ -134,7 +165,9 @@ func TestParse(t *testing.T) {
 	//for _, l := range datas {
 	//	parser.Append(ctx, l)
 	//}
-	p.Append(ctx, data)
-	p.Flush(ctx)
+	p.Append(ctx, "", data)
+	p.Flush(ctx, "")
+	p.Append(ctx, "aws", example4)
+	p.Flush(ctx, "aws")
 	fmt.Println("done")
 }

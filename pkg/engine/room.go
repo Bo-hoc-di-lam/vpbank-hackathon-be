@@ -29,6 +29,31 @@ func EmptyData() *Data {
 	}
 }
 
+type DataSet struct {
+	Old *Data
+	New *Data
+}
+
+type System struct {
+	Name      string
+	Tree      *sitter.Tree
+	Content   []byte
+	Comment   strings.Builder
+	Data      DataSet
+	BufferCnt int
+}
+
+func NewGraphSystem(name string) *System {
+	return &System{
+		Name:      name,
+		Tree:      nil,
+		Content:   nil,
+		Comment:   strings.Builder{},
+		Data:      DataSet{Old: EmptyData(), New: EmptyData()},
+		BufferCnt: 0,
+	}
+}
+
 type Room struct {
 	// sync
 	mu sync.RWMutex
@@ -38,14 +63,8 @@ type Room struct {
 	seat      map[string]*melody.Session
 
 	// parser info
-	parser        *sitter.Parser
-	tree          *sitter.Tree
-	oldData       *Data
-	newData       *Data
-	position      map[string]Position
-	bufferLineCnt int
-	data          []byte
-	explain       strings.Builder
+	parser  *sitter.Parser
+	systems map[string]*System
 }
 
 func NewRoom(id string) *Room {
@@ -55,11 +74,26 @@ func NewRoom(id string) *Room {
 		Nameplate: id,
 		seat:      make(map[string]*melody.Session),
 		parser:    p,
-		oldData:   EmptyData(),
+		systems: map[string]*System{
+			"": NewGraphSystem(""),
+		},
 	}
 }
 
 // session logic
+
+func (r *Room) System(name string) *System {
+	if r.systems[name] == nil {
+		r.systems[name] = NewGraphSystem(name)
+	}
+	return r.systems[name]
+}
+
+func (r *Room) BroadCast(event ws.Event, data any) {
+	r.Lock()
+	defer r.Unlock()
+	r.broadCast("", event, data)
+}
 
 func (r *Room) IsEmpty() bool {
 	r.mu.RLock()
@@ -78,46 +112,52 @@ func (r *Room) Join(s *melody.Session) {
 	r.Lock()
 	defer r.Unlock()
 
-	id := ws.GetUID(s)
-	r.seat[id] = s
+	uid := ws.GetUID(s)
+	r.seat[uid] = s
 	ws.SetNameplate(s, r.Nameplate)
-	zap.S().Infow("user joined room", "uid", id, "nameplate", r.Nameplate)
+	zap.S().Infow("user joined room", "uid", uid, "nameplate", r.Nameplate)
+	r.broadCast("", ws.Join, uid)
 
 	// room info
 	ws.ForceSend(s, ws.RoomInfo, r.Nameplate)
 
-	// sub graph
-	for _, v := range r.oldData.SubGraphs {
-		ws.ForceSend(s, ws.AddSubGraph, v)
+	for _, system := range r.systems {
+		for _, v := range system.Data.Old.SubGraphs {
+			r.forceSend(system.Name, s, ws.AddSubGraph, v)
+		}
+		for _, v := range system.Data.Old.Vertices {
+			r.forceSend(system.Name, s, ws.AddNode, v)
+		}
+		for _, v := range system.Data.Old.Links {
+			r.forceSend(system.Name, s, ws.AddLink, v)
+		}
+		r.forceSend(system.Name, s, ws.SetComment, system.Comment.String())
 	}
-	// vertices
-	for _, v := range r.oldData.Vertices {
-		ws.ForceSend(s, ws.AddNode, v)
-	}
-
-	// links
-	for _, v := range r.oldData.Links {
-		ws.ForceSend(s, ws.AddLink, v)
-	}
-
-	// comments
-	ws.ForceSend(s, ws.SetComment, r.explain.String())
+	r.forceSend("", s, ws.Mermaid, r.CurrentPrompt())
 }
 
-func (r *Room) broadCast(event ws.Event, data any) {
+func (r *Room) forceSend(ds string, s *melody.Session, event ws.Event, data any) {
+	if ds != "" {
+		event += ws.Event("_" + strings.ToUpper(ds))
+	}
+	ws.ForceSend(s, event, data)
+}
+
+func (r *Room) broadCast(ds string, event ws.Event, data any) {
 	for _, s := range r.seat {
-		ws.ForceSend(s, event, data)
+		r.forceSend(ds, s, event, data)
 	}
 }
 
 // parser logic
 
-func (r *Room) Reset() {
+func (r *Room) Reset(ds string) {
 	r.Lock()
 	defer r.Unlock()
-	r.bufferLineCnt = 0
-	r.data = []byte{}
-	r.explain.Reset()
+	system := r.System(ds)
+	system.BufferCnt = 0
+	system.Content = []byte{}
+	system.Comment.Reset()
 }
 
 func (r *Room) Lock() {
@@ -128,87 +168,91 @@ func (r *Room) Unlock() {
 	r.mu.Unlock()
 }
 
-func (r *Room) CompareData() {
+func (r *Room) compareData(system *System) {
 	if r.seat == nil {
 		return
 	}
 	// subgraph
 	{
-		mpNew, mpChange, _, mpDel := util.CmpMap(r.oldData.SubGraphs, r.newData.SubGraphs)
+		mpNew, mpChange, _, mpDel := util.CmpMap(system.Data.Old.SubGraphs, system.Data.New.SubGraphs)
 		for _, v := range mpNew {
-			r.broadCast(ws.AddSubGraph, v)
+			r.broadCast(system.Name, ws.AddSubGraph, v)
 		}
 		for _, v := range mpChange {
-			r.broadCast(ws.ChangeSubGraph, v)
+			r.broadCast(system.Name, ws.ChangeSubGraph, v)
 		}
 		for _, v := range mpDel {
-			r.broadCast(ws.DelSubGraph, v)
+			r.broadCast(system.Name, ws.DelSubGraph, v)
 		}
 	}
 
 	// vertices
 	{
-		mpNew, mpChange, _, mpDel := util.CmpMap(r.oldData.Vertices, r.newData.Vertices)
+		mpNew, mpChange, _, mpDel := util.CmpMap(system.Data.Old.Vertices, system.Data.New.Vertices)
 		for _, v := range mpNew {
-			r.broadCast(ws.AddNode, v)
+			r.broadCast(system.Name, ws.AddNode, v)
 		}
 		for _, v := range mpChange {
-			r.broadCast(ws.ChangeNode, v)
+			r.broadCast(system.Name, ws.ChangeNode, v)
 		}
 		for _, v := range mpDel {
-			r.broadCast(ws.DelNode, v)
+			r.broadCast(system.Name, ws.DelNode, v)
 		}
 	}
 	// links
 	{
-		mpNew, mpChange, _, mpDel := util.CmpMap(r.oldData.Links, r.newData.Links)
+		mpNew, mpChange, _, mpDel := util.CmpMap(system.Data.Old.Links, system.Data.New.Links)
 		for _, v := range mpNew {
-			r.broadCast(ws.AddLink, v)
+			r.broadCast(system.Name, ws.AddLink, v)
 		}
 		for _, v := range mpChange {
-			r.broadCast(ws.ChangeLink, v)
+			r.broadCast(system.Name, ws.ChangeLink, v)
 		}
 		for _, v := range mpDel {
-			r.broadCast(ws.DelLink, v)
+			r.broadCast(system.Name, ws.DelLink, v)
 		}
 	}
 
 }
 
-func (r *Room) SetNodePosition(id string, x int, y int) {
-	node := r.oldData.Vertices[id]
+func (r *Room) SetNodePosition(ds string, id string, x int, y int) {
+	system := r.System(ds)
+	node := system.Data.Old.Vertices[id]
 	if node == nil {
 		return
 	}
 	if node.Position.X != x || node.Position.Y != y {
 		node.Position.X = x
 		node.Position.Y = y
-		r.broadCast(ws.SetNodePosition, node)
+		r.broadCast(ds, ws.SetNodePosition, node)
 	}
 }
 
-func (r *Room) AppendComment(s string) {
-	r.explain.WriteString(s)
+func (r *Room) AppendComment(ds string, s string) {
+	system := r.System(ds)
+	system.Comment.WriteString(s)
 }
 
 func (r *Room) CurrentPrompt() string {
-	return string(r.data)
+	system := r.System("")
+	return string(system.Content)
 }
 
-func (r *Room) Append(ctx context.Context, s string) {
-	r.data = append(r.data, []byte(s)...)
-	r.bufferLineCnt++
-	if r.bufferLineCnt != 0 && r.bufferLineCnt%BufferFlushThreshold == 0 {
-		r.Flush(ctx)
+func (r *Room) Append(ctx context.Context, ds string, s string) {
+	system := r.System(ds)
+	system.Content = append(system.Content, []byte(s)...)
+	system.BufferCnt++
+	if system.BufferCnt != 0 && system.BufferCnt%BufferFlushThreshold == 0 {
+		r.Flush(ctx, ds)
 	}
 }
 
-func (r *Room) getLink(root *sitter.Node) *Link {
+func (r *Room) getLink(system *System, root *sitter.Node) *Link {
 	text := ""
-	arrow := firstNode(root, "flow_link_arrow").Content(r.data)
+	arrow := firstNode(root, "flow_link_arrow").Content(system.Content)
 	textNode := firstNode(root, "flow_arrow_text")
 	if textNode != nil {
-		text = textNode.Content(r.data)
+		text = textNode.Content(system.Content)
 	}
 	return &Link{
 		Text: text,
@@ -216,8 +260,8 @@ func (r *Room) getLink(root *sitter.Node) *Link {
 	}
 }
 
-func (r *Room) getSubgraph(root *sitter.Node) *SubGraph {
-	txt := root.Content(r.data)
+func (r *Room) getSubgraph(system *System, root *sitter.Node) *SubGraph {
+	txt := root.Content(system.Content)
 	txt = strings.Split(txt, "\n")[0]
 	txt = strings.TrimPrefix(txt, "subgraph ")
 	txt = strings.Trim(txt, "\"")
@@ -227,7 +271,7 @@ func (r *Room) getSubgraph(root *sitter.Node) *SubGraph {
 	}
 }
 
-func (r *Room) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
+func (r *Room) getVertex(system *System, subGraph *SubGraph, root *sitter.Node) *Vertex {
 	subGraphTxt := ""
 	if subGraph != nil {
 		subGraphTxt = subGraph.Text
@@ -236,10 +280,10 @@ func (r *Room) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
 	shape := ""
 	text := ""
 	vertex := firstNode(root, "flow_vertex")
-	id := firstNode(vertex, "flow_vertex_id").Content(r.data)
+	id := firstNode(vertex, "flow_vertex_id").Content(system.Content)
 
-	if r.newData.Vertices[id] != nil {
-		return r.newData.Vertices[id]
+	if system.Data.New.Vertices[id] != nil {
+		return system.Data.New.Vertices[id]
 	}
 	//get shape
 	for i := 0; i < int(vertex.ChildCount()); i++ {
@@ -250,51 +294,52 @@ func (r *Room) getVertex(subGraph *SubGraph, root *sitter.Node) *Vertex {
 			// get text
 			textNode := firstNode(shapeNode, "flow_text_literal")
 			if textNode != nil {
-				text = textNode.Content(r.data)
+				text = textNode.Content(system.Content)
 			}
 
 			break
 		}
 	}
-
+	icon, text := splitIcon(text)
 	data := &Vertex{
 		ID:       id,
 		Shape:    shape,
 		Text:     text,
 		SubGraph: subGraphTxt,
+		Icon:     icon,
 	}
-	r.newData.Vertices[id] = data
+	system.Data.New.Vertices[id] = data
 	return data
 }
 
-func (r *Room) parse(ctx context.Context) {
-	r.newData = EmptyData()
-	tree, err := r.parser.ParseCtx(ctx, nil, r.data)
+func (r *Room) parse(ctx context.Context, system *System) {
+	system.Data.New = EmptyData()
+	tree, err := r.parser.ParseCtx(ctx, nil, system.Content)
 	if err != nil {
 		zap.S().Error("error when parse", "error", err)
 	}
-	r.tree = tree
-	r.travel(nil, r.tree.RootNode(), 0)
-	r.CompareData()
-	r.oldData = r.newData
+	system.Tree = tree
+	r.travel(system, nil, tree.RootNode(), 0)
+	r.compareData(system)
+	system.Data.Old = system.Data.New
 }
 
-func (r *Room) Flush(ctx context.Context) {
-	if r.bufferLineCnt != 0 {
-		r.bufferLineCnt = 0
-		r.parse(ctx)
+func (r *Room) Flush(ctx context.Context, ds string) {
+	system := r.System(ds)
+	if system.BufferCnt != 0 {
+		system.BufferCnt = 0
+		r.parse(ctx, system)
 	}
-	r.broadCast(ws.SetComment, r.explain.String())
+	r.broadCast(ds, ws.SetComment, system.Comment.String())
 }
 
-func (r *Room) travel(subGraph *SubGraph, root *sitter.Node, level int) {
+func (r *Room) travel(system *System, subGraph *SubGraph, root *sitter.Node, level int) {
 
 	if DEBUG {
 		fmt.Print(level)
 		for i := 0; i < level; i++ {
 			fmt.Print("  ")
 		}
-		fmt.Println(root.Type(), root.Content(r.data))
 	}
 
 	if root.Type() == "ERROR" {
@@ -304,12 +349,12 @@ func (r *Room) travel(subGraph *SubGraph, root *sitter.Node, level int) {
 	switch root.Type() {
 	case "flow_stmt_subgraph":
 		pre := subGraph
-		subGraph = r.getSubgraph(root)
+		subGraph = r.getSubgraph(system, root)
 		if pre != nil {
 			subGraph.Root = pre
 			subGraph.Parent = pre.Text
 		}
-		r.newData.SubGraphs[subGraph.Text] = subGraph
+		system.Data.New.SubGraphs[subGraph.Text] = subGraph
 	case "end":
 		subGraph = subGraph.Root
 	case "flow_stmt_vertice":
@@ -318,11 +363,11 @@ func (r *Room) travel(subGraph *SubGraph, root *sitter.Node, level int) {
 		for i := 0; i < int(root.ChildCount()); i++ {
 			child := root.Child(i)
 			if child.Type() == "flow_node" {
-				node := r.getVertex(subGraph, child)
+				node := r.getVertex(system, subGraph, child)
 				vertices = append(vertices, node)
 			}
 			if strings.HasPrefix(child.Type(), "flow_link") {
-				link := r.getLink(child)
+				link := r.getLink(system, child)
 				links = append(links, link)
 			}
 		}
@@ -332,13 +377,13 @@ func (r *Room) travel(subGraph *SubGraph, root *sitter.Node, level int) {
 			links[i].ID = links[i].Key()
 		}
 		for i := 0; i < len(links); i++ {
-			r.newData.Links[links[i].Key()] = links[i]
+			system.Data.New.Links[links[i].Key()] = links[i]
 		}
 		return
 
 	}
 
 	for i := 0; i < int(root.ChildCount()); i++ {
-		r.travel(subGraph, root.Child(i), level+1)
+		r.travel(system, subGraph, root.Child(i), level+1)
 	}
 }

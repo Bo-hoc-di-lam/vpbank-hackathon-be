@@ -4,6 +4,10 @@ type PromptDTO struct {
 	Input string `json:"input"`
 }
 
+type GenIconDTO struct {
+	OldDiagram string `json:"old_diagram"`
+}
+
 type EditDTO struct {
 	Input      string     `json:"input"`
 	OldDiagram string     `json:"old_diagram"`
@@ -24,4 +28,8 @@ type Data struct {
 	Output    string            `json:"output"`
 	Positions map[string][2]int `json:"positions"`
 	Comments  string            `json:"comments"`
+}
+
+type InputWrap[T any] struct {
+	Input T `json:"input"`
 }

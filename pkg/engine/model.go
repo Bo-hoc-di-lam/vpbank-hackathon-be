@@ -13,6 +13,7 @@ type Position struct {
 
 type Vertex struct {
 	Position Position `json:"position"`
+	Icon     string   `json:"icon"`
 	SubGraph string   `json:"sub_graph"`
 	ID       string   `json:"id"`
 	Text     string   `json:"text"`
@@ -20,7 +21,7 @@ type Vertex struct {
 }
 
 func (v *Vertex) Diff(v2 *Vertex) bool {
-	return v.ID != v2.ID || v.Text != v2.Text || v.Shape != v2.Shape || v.SubGraph != v2.SubGraph
+	return v.ID != v2.ID || v.Text != v2.Text || v.Shape != v2.Shape || v.SubGraph != v2.SubGraph || v.Icon != v2.Icon
 }
 
 type Link struct {

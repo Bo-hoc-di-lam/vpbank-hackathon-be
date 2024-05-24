@@ -60,7 +60,14 @@ func (r *receptionist) Work() {
 	r.ws.HandleDisconnect(func(s *melody.Session) {
 		uid := ws.GetUID(s)
 		zap.S().Infow("user left", "uid", uid)
+		room, err := r.office.GetRoomForUser(s)
+		if err != nil {
+			zap.S().Errorw("error when get room", "uid", uid, "error", err)
+			return
+		}
 		r.office.Leave(s)
+		room.BroadCast(ws.Leave, uid)
+
 	})
 	r.ws.HandleMessage(func(s *melody.Session, msg []byte) {
 		uid := ws.GetUID(s)
@@ -69,6 +76,16 @@ func (r *receptionist) Work() {
 			zap.S().Infow("error when parse json", "error", err, "uid", uid, "data", string(msg))
 			ws.ForceSend(s, ws.Error, "invalid json")
 		}
+		room, err := r.office.GetRoomForUser(s)
+		if err != nil {
+			zap.S().Errorw("error when get room", "uid", uid, "error", err)
+			ws.ForceSend(s, ws.Error, err.Error())
+			return
+		}
+		room.BroadCast(ws.Lock, data)
+		defer func() {
+			room.BroadCast(ws.Done, data)
+		}()
 		zap.S().Infow("user asked", "uid", uid, "data", data)
 		switch data.Event {
 		case ws.Prompt:
@@ -80,6 +97,15 @@ func (r *receptionist) Work() {
 			}
 			zap.S().Infow("use asked to prompt", "uid", uid, "prompt", dto.Input)
 			r.HandleQuestion(s, dto.Input)
+		case ws.GenIcon:
+			dto, err := util.AnyToStruct[ws.GenIconDTO](data.Data)
+			if err != nil {
+				zap.S().Errorw("error when parse dto", "error", err, "data", data)
+				ws.ForceSend(s, ws.Error, err.Error())
+				return
+			}
+			zap.S().Infow("user asked to generate icon", "uid", uid, "type", dto.Type)
+			r.HandleGenIcon(dto.Type, s, ws.PromptDTO{})
 		case ws.PromptEdit:
 			dto, err := util.AnyToStruct[ws.PromptDTO](data.Data)
 			if err != nil {
@@ -111,6 +137,56 @@ func (r *receptionist) HandleJoinRoom(s *melody.Session, nameplate string) {
 	room.Join(s)
 }
 
+func (r *receptionist) HandleGenIcon(ds string, s *melody.Session, data ws.PromptDTO) {
+	ctx := context.Background()
+	uid := ws.GetUID(s)
+	room, err := r.office.GetRoomForUser(s)
+	if err != nil {
+		zap.S().Error("error when get room", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	currentPrompt := room.CurrentPrompt()
+	stream, err := r.ai.GenIcon(ds, currentPrompt)
+	if err != nil {
+		zap.S().Errorw("error when gen icon", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	defer stream.Close()
+	room.Reset(ds)
+	room.Lock()
+	defer room.Unlock()
+	for {
+		event, err := stream.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			zap.S().Errorw("error when read event", "uid", uid, "error", err)
+			ws.ForceSend(s, ws.Error, err.Error())
+			break
+		}
+		if event.Event == "end" {
+			break
+		}
+		if event.Event == "data" {
+			if event.Data.Output != "" {
+				room.Append(ctx, ds, event.Data.Output)
+			}
+			if event.Data.Positions != nil {
+				for k, v := range event.Data.Positions {
+					room.SetNodePosition(ds, k, v[0], v[1])
+				}
+			}
+			if event.Data.Comments != "" {
+				room.AppendComment(ds, event.Data.Comments)
+			}
+		}
+	}
+	room.Flush(ctx, ds)
+}
+
 func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 	ctx := context.Background()
 	uid := ws.GetUID(s)
@@ -128,8 +204,9 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 		return
 	}
 	defer stream.Close()
-	room.Reset()
+	room.Reset("")
 	room.Lock()
+	defer func() { room.BroadCast(ws.Mermaid, room.CurrentPrompt()) }()
 	defer room.Unlock()
 	for {
 		event, err := stream.Next()
@@ -146,19 +223,19 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 		}
 		if event.Event == "data" {
 			if event.Data.Output != "" {
-				room.Append(ctx, event.Data.Output)
+				room.Append(ctx, "", event.Data.Output)
 			}
 			if event.Data.Positions != nil {
 				for k, v := range event.Data.Positions {
-					room.SetNodePosition(k, v[0], v[1])
+					room.SetNodePosition("", k, v[0], v[1])
 				}
 			}
 			if event.Data.Comments != "" {
-				room.AppendComment(event.Data.Comments)
+				room.AppendComment("", event.Data.Comments)
 			}
 		}
 	}
-	room.Flush(ctx)
+	room.Flush(ctx, "")
 }
 
 func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
@@ -176,8 +253,9 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 		return
 	}
 	defer stream.Close()
-	room.Reset()
+	room.Reset("")
 	room.Lock()
+	defer func() { room.BroadCast(ws.Mermaid, room.CurrentPrompt()) }()
 	defer room.Unlock()
 	for {
 		event, err := stream.Next()
@@ -194,18 +272,18 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 		}
 		if event.Event == "data" {
 			if event.Data.Output != "" {
-				room.Append(ctx, event.Data.Output)
+				room.Append(ctx, "", event.Data.Output)
 			}
 			if event.Data.Positions != nil {
 				for k, v := range event.Data.Positions {
-					room.SetNodePosition(k, v[0], v[1])
+					room.SetNodePosition("", k, v[0], v[1])
 				}
 			}
 			if event.Data.Comments != "" {
-				room.AppendComment(event.Data.Comments)
+				room.AppendComment("", event.Data.Comments)
 			}
 		}
 
 	}
-	room.Flush(ctx)
+	room.Flush(ctx, "")
 }
