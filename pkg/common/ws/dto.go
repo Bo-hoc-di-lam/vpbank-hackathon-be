@@ -15,3 +15,7 @@ type PromptDTO struct {
 	Input     string             `json:"input"`
 	EditNodes []ai_core.EditNode `json:"edit_nodes,omitempty"`
 }
+
+type GenIconDTO struct {
+	Type string `json:"type"`
+}

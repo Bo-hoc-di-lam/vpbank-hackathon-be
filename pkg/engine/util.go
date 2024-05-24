@@ -2,6 +2,7 @@ package engine
 
 import (
 	sitter "github.com/smacker/go-tree-sitter"
+	"strings"
 )
 
 func firstNode(root *sitter.Node, nodeType string) *sitter.Node {
@@ -11,4 +12,12 @@ func firstNode(root *sitter.Node, nodeType string) *sitter.Node {
 		}
 	}
 	return nil
+}
+
+func splitIcon(text string) (string, string) {
+	split := strings.Split(text, ": ")
+	if len(split) == 1 {
+		return "", text
+	}
+	return split[0], split[1]
 }

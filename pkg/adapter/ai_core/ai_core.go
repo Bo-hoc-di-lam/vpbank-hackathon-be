@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"github.com/samber/do"
 	"net/http"
+	"strings"
 )
 
 type Adapter interface {
 	Prompt(data string) (Decoder, error)
 	Edit(prompt string, oldData string, editNode []EditNode) (Decoder, error)
+	GenIcon(ds, diagram string) (Decoder, error)
 }
 
 type adapter struct {
@@ -30,12 +32,38 @@ func NewAdapter(di *do.Injector) (Adapter, error) {
 	}, nil
 }
 
+func (a *adapter) GenIcon(ds string, diagram string) (Decoder, error) {
+	url := fmt.Sprint(a.conf.BaseURL, fmt.Sprintf(a.conf.GenIconEndpoint, strings.ToLower(ds)))
+	body, err := json.Marshal(InputWrap[GenIconDTO]{
+		GenIconDTO{
+			OldDiagram: diagram,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status code %d", resp.StatusCode)
+	}
+	return NewDecoder(resp.Body), nil
+}
+
 func (a *adapter) Edit(prompt string, oldData string, editNode []EditNode) (Decoder, error) {
 	url := fmt.Sprint(a.conf.BaseURL, a.conf.EditEndpoint)
-	body, err := json.Marshal(EditDTO{
-		Input:      prompt,
-		OldDiagram: oldData,
-		EditNodes:  editNode,
+	body, err := json.Marshal(InputWrap[EditDTO]{
+		EditDTO{
+			Input:      prompt,
+			OldDiagram: oldData,
+			EditNodes:  editNode,
+		},
 	})
 	if err != nil {
 		return nil, err

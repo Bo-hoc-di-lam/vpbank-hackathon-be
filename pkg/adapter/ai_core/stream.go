@@ -3,6 +3,7 @@ package ai_core
 import (
 	"bufio"
 	"encoding/json"
+	"go.uber.org/zap"
 	"io"
 	"strings"
 )
@@ -31,15 +32,16 @@ func (d *decoder) Close() error {
 
 func (d *decoder) Next() (*Event, error) {
 	var event Event
-	line1, err := d.Read()
+	line, err := d.Read()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(line1) == 0 {
+	if len(line) == 0 || !strings.HasPrefix(string(line), "event: ") {
+		zap.S().Errorw("error receive non event", "data", line)
 		return d.Next()
 	}
-	event.Event = string(line1)
+	event.Event = string(line)
 	event.Event = strings.TrimPrefix(event.Event, "event: ")
 	if event.Event == "end" {
 		return nil, io.EOF
@@ -50,6 +52,7 @@ func (d *decoder) Next() (*Event, error) {
 	}
 	dataStr := strings.TrimPrefix(string(line2), "data: ")
 	if err := json.Unmarshal([]byte(dataStr), &event.Data); err != nil {
+		zap.S().Errorw("error when parse json from decoder", "error", err, "data", line)
 		return nil, err
 	}
 
