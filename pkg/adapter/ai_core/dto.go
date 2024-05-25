@@ -16,7 +16,7 @@ type EditDTO struct {
 
 type EditNode struct {
 	NodeID string `json:"node_id"`
-	Tittle string `json:"tittle"`
+	Title string `json:"title"`
 }
 
 type Event struct {

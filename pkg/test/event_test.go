@@ -57,8 +57,8 @@ func TestEvent(t *testing.T) {
 		{ws.PromptEdit, ws.PromptDTO{
 			Input: "hello",
 			EditNodes: []ai_core.EditNode{
-				{"A", "Tittle A"},
-				{"B", "Tittle B"},
+				{"A", "Title A"},
+				{"B", "Title B"},
 			},
 		}},
 		{ws.JoinRoom, "ADFJL3"},
