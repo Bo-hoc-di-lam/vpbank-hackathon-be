@@ -17,5 +17,8 @@ jobs:
         env:
           AI_CORE_BASE_URL: ${{ vars.ai_core_base_url }}
           AI_CORE_PROMPT_ENDPOINT: ${{ vars.ai_core_prompt_endpoint }}
+          AI_CORE_EDIT_ENDPOINT: ${{ vars.ai_core_edit_endpoint }}
+          AI_CORE_GEN_ICON_ENDPOINT: ${{ vars.ai_core_gen_icon_endpoint }}
+          AI_CORE_GEN_CODE_ENDPOINT: ${{ vars.ai_core_gen_code_endpoint }}
           SERVER_PORT: ${{ vars.server_port }}
-        run: 'docker run -d -e AI_CORE_BASE_URL -e AI_CORE_PROMPT_ENDPOINT -p 8080:${{ vars.server_port }} --name be-app be-app'
+        run: 'docker run -d -e AI_CORE_BASE_URL -e AI_CORE_PROMPT_ENDPOINT -e AI_CORE_EDIT_ENDPOINT -e AI_CORE_GEN_ICON_ENDPOINT -e AI_CORE_GEN_CODE_ENDPOINT -p 8080:${{ vars.server_port }} --name be-app be-app'
