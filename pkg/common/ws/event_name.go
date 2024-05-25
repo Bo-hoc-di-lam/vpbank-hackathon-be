@@ -9,6 +9,7 @@ const (
 	Lock     Event = "LOCK"
 	Done     Event = "DONE"
 	RoomInfo Event = "ROOM_INFO"
+	Reset    Event = "RESET"
 
 	Prompt     Event = "PROMPT"
 	PromptEdit Event = "PROMPT_EDIT"

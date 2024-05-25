@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"github.com/olahol/melody"
@@ -15,11 +16,13 @@ func Send[T any](s *melody.Session, event Event, data T) error {
 		Event: event,
 		Data:  data,
 	}
-	jsonData, err := json.Marshal(wrapper)
-	if err != nil {
+	b := new(bytes.Buffer)
+	encoder := json.NewEncoder(b)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(wrapper); err != nil {
 		return err
 	}
-	return s.Write(jsonData)
+	return s.Write(b.Bytes())
 }
 
 func ForceSend[T any](s *melody.Session, event Event, data T) {

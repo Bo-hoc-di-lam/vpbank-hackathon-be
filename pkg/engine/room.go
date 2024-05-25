@@ -164,9 +164,15 @@ func (r *Room) Reset(ds string) {
 	r.Lock()
 	defer r.Unlock()
 	system := r.System(ds)
+	system.Terraform.Reset()
 	system.BufferCnt = 0
 	system.Content = []byte{}
 	system.Comment.Reset()
+	system.Data = DataSet{
+		Old: EmptyData(),
+		New: EmptyData(),
+	}
+	r.broadCast(ds, ws.Reset, nil)
 }
 
 func (r *Room) Lock() {
@@ -268,10 +274,15 @@ func (r *Room) Append(ctx context.Context, ds string, s string) {
 func (r *Room) getLink(system *System, root *sitter.Node) *Link {
 	text := ""
 	arrow := firstNode(root, "flow_link_arrow").Content(system.Content)
-	textNode := firstNode(root, "flow_arrow_text")
-	if textNode != nil {
-		text = textNode.Content(system.Content)
+	txtNodeTypes := []string{"flow_arrow_text"}
+	for _, nodeType := range txtNodeTypes {
+		textNode := firstNode(root, nodeType)
+		if textNode != nil {
+			text = textNode.Content(system.Content)
+			break
+		}
 	}
+
 	return &Link{
 		Text: text,
 		Type: arrow,
@@ -310,14 +321,23 @@ func (r *Room) getVertex(system *System, subGraph *SubGraph, root *sitter.Node) 
 			shape = shapeNode.Type()
 			shape = strings.TrimPrefix(shape, "flow_vertex_")
 			// get text
-			textNode := firstNode(shapeNode, "flow_text_literal")
-			if textNode != nil {
-				text = textNode.Content(system.Content)
+			txtNodeTypes := []string{"flow_text_literal", "flow_text_quoted"}
+			ok := false
+			for _, nodeType := range txtNodeTypes {
+				textNode := firstNode(shapeNode, nodeType)
+				if textNode != nil {
+					text = textNode.Content(system.Content)
+					ok = true
+					break
+				}
+			}
+			if ok {
+				break
 			}
 
-			break
 		}
 	}
+	text = util.TryUnquote(text)
 	icon, text := splitIcon(text)
 	data := &Vertex{
 		ID:       id,
@@ -366,6 +386,7 @@ func (r *Room) travel(system *System, subGraph *SubGraph, root *sitter.Node, lev
 		for i := 0; i < level; i++ {
 			fmt.Print("  ")
 		}
+		fmt.Println(root.Type(), root.Content(system.Content))
 	}
 
 	if root.Type() == "ERROR" {
