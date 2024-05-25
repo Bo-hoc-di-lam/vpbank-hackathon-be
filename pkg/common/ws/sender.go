@@ -22,7 +22,9 @@ func Send[T any](s *melody.Session, event Event, data T) error {
 	if err := encoder.Encode(wrapper); err != nil {
 		return err
 	}
-	return s.Write(b.Bytes())
+	x := b.Bytes()
+	zap.S().Infow("send", "event", event, "data", data)
+	return s.Write(x)
 }
 
 func ForceSend[T any](s *melody.Session, event Event, data T) {
