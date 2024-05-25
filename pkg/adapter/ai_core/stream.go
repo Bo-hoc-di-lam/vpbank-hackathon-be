@@ -1,6 +1,7 @@
 package ai_core
 
 import (
+	"be/pkg/util"
 	"bufio"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,10 @@ import (
 	"io"
 	"strings"
 )
+
+func init() {
+	//json.new
+}
 
 type Decoder interface {
 	io.Closer
@@ -57,6 +62,7 @@ func (d *decoder) Next() (*Event, error) {
 		zap.S().Errorw("error when parse json from decoder", "error", err, "data", line)
 		return nil, err
 	}
+	event.Data.Output = util.TryUnquote(event.Data.Output)
 
 	_, err = d.Read()
 	if err != nil {
