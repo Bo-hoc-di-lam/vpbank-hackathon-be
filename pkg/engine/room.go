@@ -207,10 +207,11 @@ func (r *Room) compareData(system *System) {
 		for _, v := range mpNew {
 			if v.Text == "" {
 				if v.ID == "" {
-					zap.S().Warn("empty text and ID for node", "id", v.ID)
+					zap.S().Warn("empty text and ID for node: ", "id", v.ID)
+					continue
 				} else {
 					v.Text = v.ID
-					zap.S().Warn("empty text for node, set it to ID", "id", v.ID)
+					zap.S().Warn("empty text for node, set it to ID: ", "id", v.ID)
 				}
 			}
 			r.broadCast(system.Name, ws.AddNode, v)
