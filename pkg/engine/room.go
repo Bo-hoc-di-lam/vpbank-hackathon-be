@@ -205,6 +205,14 @@ func (r *Room) compareData(system *System) {
 	{
 		mpNew, mpChange, _, mpDel := util.CmpMap(system.Data.Old.Vertices, system.Data.New.Vertices)
 		for _, v := range mpNew {
+			if v.Text == "" {
+				if v.ID == "" {
+					zap.S().Warn("empty text and ID for node", "id", v.ID)
+				} else {
+					v.Text = v.ID
+					zap.S().Warn("empty text for node, set it to ID", "id", v.ID)
+				}
+			}
 			r.broadCast(system.Name, ws.AddNode, v)
 		}
 		for _, v := range mpChange {
