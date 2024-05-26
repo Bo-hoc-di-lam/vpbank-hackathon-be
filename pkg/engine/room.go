@@ -320,7 +320,7 @@ func (r *Room) getVertex(system *System, subGraph *SubGraph, root *sitter.Node) 
 	vertex := firstNode(root, "flow_vertex")
 	id := firstNode(vertex, "flow_vertex_id").Content(system.Content)
 
-	if system.Data.New.Vertices[id] != nil {
+	if system.Data.New.Vertices[id] != nil && system.Data.New.Vertices[id].Text != "" {
 		return system.Data.New.Vertices[id]
 	}
 	//get shape
