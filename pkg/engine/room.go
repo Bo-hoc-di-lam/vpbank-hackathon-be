@@ -256,6 +256,9 @@ func (r *Room) SetNodePosition(ds string, id string, x int, y int) {
 func (r *Room) AppendComment(ds, s string) {
 	system := r.System(ds)
 	system.Comment.WriteString(s)
+	if system.Comment.String() != "" {
+		r.broadCast(ds, ws.SetComment, system.Comment.String())
+	}
 }
 
 func (r *Room) AppendTerraform(ds, s string) {
