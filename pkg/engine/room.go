@@ -199,6 +199,7 @@ func (r *Room) compareData(system *System) {
 		for _, v := range mpDel {
 			r.broadCast(system.Name, ws.DelSubGraph, v)
 		}
+		r.broadCast(system.Name, ws.SetComment, system.Comment.String())
 	}
 
 	// vertices
