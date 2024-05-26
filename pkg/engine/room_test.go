@@ -220,8 +220,46 @@ graph TD
 
 `
 
+const e6 = `
+graph TD;
+    A["User"] --> B["Load Balancer"]
+    B --> C1["Web Server 1"]
+    B --> C2["Web Server 2"]
+    B --> C3["Web Server 3"]
+    
+    C1 --> D["Application Server 1"]
+    C2 --> D["Application Server 2"]
+    C3 --> D["Application Server 3"]
+    
+    D --> E1["Database Cluster"]
+    D --> E2["Cache Cluster"]
+    D --> F["Microservices"]
+    
+    F --> G1["User Service"]
+    F --> G2["Content Service"]
+    F --> G3["Recommendation Service"]
+    F --> G4["Billing Service"]
+    
+    G1 --> E1
+    G2 --> E1
+    G3 --> E1
+    G4 --> E1
+    
+    C1 --> H1["Third-Party Auth API"]
+    C2 --> H1
+    C3 --> H1
+    
+    C1 --> H2["Third-Party Payment API"]
+    C2 --> H2
+    C3 --> H2
+`
+const missing = `
+graph LR
+A["Users"] -- HTTP/HTTPS --> B["Load Balancer"]
+`
+
 func TestParse(t *testing.T) {
-	data := example5
+	data := missing
 	DEBUG = true
 
 	conf := zap.NewDevelopmentConfig()

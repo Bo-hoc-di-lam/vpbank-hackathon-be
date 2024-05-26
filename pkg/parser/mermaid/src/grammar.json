@@ -4413,7 +4413,7 @@
     },
     "_alpha_num_token": {
       "type": "PATTERN",
-      "value": "[a-zA-Z0-9_~!?]+"
+      "value": "[a-zA-Z0-9_~!?\\/]+"
     },
     "_bquote_string": {
       "type": "PATTERN",
