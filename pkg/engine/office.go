@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const CleanInterval = time.Minute * 5
+const CleanInterval = time.Minute * 30
 
 var ErrRoomNotFound = errors.New("room not found")
 var ErrGenerateNameplateFailed = errors.New("generate nameplate failed")
