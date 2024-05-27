@@ -15,6 +15,8 @@ import (
 
 var DEBUG = false
 
+const MaxMsgLength = 70
+
 type Data struct {
 	Vertices  map[string]*Vertex   `json:"vertices"`
 	Links     map[string]*Link     `json:"links"`
@@ -35,23 +37,24 @@ type DataSet struct {
 }
 
 type System struct {
-	Terraform strings.Builder `json:"terraform"`
-	Name      string
-	Tree      *sitter.Tree
-	Content   []byte
-	Comment   strings.Builder
-	Data      DataSet
-	BufferCnt int
+	Terraform       strings.Builder `json:"terraform"`
+	TerraformBuffer string
+	Name            string
+	Tree            *sitter.Tree
+	Content         []byte
+	Comment         strings.Builder
+	CommentBuffer   string
+	Data            DataSet
+	BufferCnt       int
 }
 
 func NewGraphSystem(name string) *System {
 	return &System{
-		Name:      name,
-		Tree:      nil,
-		Content:   nil,
-		Comment:   strings.Builder{},
-		Data:      DataSet{Old: EmptyData(), New: EmptyData()},
-		BufferCnt: 0,
+		Name:    name,
+		Tree:    nil,
+		Content: nil,
+		Comment: strings.Builder{},
+		Data:    DataSet{Old: EmptyData(), New: EmptyData()},
 	}
 }
 
@@ -132,8 +135,18 @@ func (r *Room) Join(s *melody.Session) {
 		for _, v := range system.Data.Old.Links {
 			r.forceSend(system.Name, s, ws.AddLink, v)
 		}
-		r.forceSend(system.Name, s, ws.SetComment, system.Comment.String())
-		r.forceSend(system.Name, s, ws.SetTerraform, system.Terraform.String())
+		buf := system.Comment.String()
+		for len(buf) > 0 {
+			mx := min(MaxMsgLength, len(buf))
+			r.forceSend(system.Name, s, ws.SetComment, buf[:mx])
+			buf = buf[mx:]
+		}
+		buf = system.Terraform.String()
+		for len(buf) > 0 {
+			mx := min(MaxMsgLength, len(buf))
+			r.forceSend(system.Name, s, ws.SetTerraform, buf[:mx])
+			buf = buf[mx:]
+		}
 	}
 	r.forceSend("", s, ws.Mermaid, r.CurrentDiagram(""))
 }
@@ -158,7 +171,7 @@ func (r *Room) ResetTerraform(ds string) {
 	defer r.Unlock()
 	system := r.System(ds)
 	system.Terraform.Reset()
-	system.BufferCnt = 0
+	system.TerraformBuffer = ""
 }
 
 func (r *Room) Reset(ds string) {
@@ -166,9 +179,11 @@ func (r *Room) Reset(ds string) {
 	defer r.Unlock()
 	system := r.System(ds)
 	system.Terraform.Reset()
-	system.BufferCnt = 0
 	system.Content = []byte{}
+	system.TerraformBuffer = ""
 	system.Comment.Reset()
+	system.CommentBuffer = ""
+	system.BufferCnt = 0
 	system.Data = DataSet{
 		Old: EmptyData(),
 		New: EmptyData(),
@@ -200,7 +215,11 @@ func (r *Room) compareData(system *System) {
 		for _, v := range mpDel {
 			r.broadCast(system.Name, ws.DelSubGraph, v)
 		}
-		r.broadCast(system.Name, ws.SetComment, system.Comment.String())
+		for len(system.CommentBuffer) > MaxMsgLength {
+			mx := min(MaxMsgLength, len(system.CommentBuffer))
+			r.broadCast(system.Name, ws.SetComment, system.CommentBuffer[:mx])
+			system.CommentBuffer = system.CommentBuffer[mx:]
+		}
 	}
 
 	// vertices
@@ -257,17 +276,22 @@ func (r *Room) SetNodePosition(ds string, id string, x int, y int) {
 func (r *Room) AppendComment(ds, s string) {
 	system := r.System(ds)
 	system.Comment.WriteString(s)
-	if system.Comment.Len() > 0 {
-		r.broadCast(ds, ws.SetComment, system.Comment.String())
+	system.CommentBuffer += s
+	for len(system.CommentBuffer) > MaxMsgLength {
+		mx := min(MaxMsgLength, len(system.CommentBuffer))
+		r.broadCast(ds, ws.SetComment, system.CommentBuffer[:mx])
+		system.CommentBuffer = system.CommentBuffer[mx:]
 	}
 }
 
 func (r *Room) AppendTerraform(ds, s string) {
 	system := r.System(ds)
 	system.Terraform.WriteString(s)
-	system.BufferCnt++
-	if system.BufferCnt != 0 && system.BufferCnt%BufferFlushThreshold == 0 {
-		r.FlushTerraform(ds)
+	system.TerraformBuffer += s
+	for len(system.TerraformBuffer) > MaxMsgLength {
+		mx := min(MaxMsgLength, len(system.TerraformBuffer))
+		r.broadCast(ds, ws.SetTerraform, system.TerraformBuffer[:mx])
+		system.TerraformBuffer = system.TerraformBuffer[mx:]
 	}
 }
 
@@ -382,15 +406,20 @@ func (r *Room) Flush(ctx context.Context, ds string) {
 		system.BufferCnt = 0
 		r.parse(ctx, system)
 	}
-	r.broadCast(ds, ws.SetComment, system.Comment.String())
+	for len(system.CommentBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.CommentBuffer))
+		r.broadCast(ds, ws.SetComment, system.CommentBuffer[:mx])
+		system.CommentBuffer = system.CommentBuffer[mx:]
+	}
 }
 
 func (r *Room) FlushTerraform(ds string) {
 	system := r.System(ds)
-	if system.BufferCnt != 0 {
-		system.BufferCnt = 0
+	for len(system.TerraformBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.TerraformBuffer))
+		r.broadCast(ds, ws.SetTerraform, system.TerraformBuffer[:mx])
+		system.TerraformBuffer = system.TerraformBuffer[mx:]
 	}
-	r.broadCast(ds, ws.SetTerraform, system.Terraform.String())
 }
 
 func (r *Room) travel(system *System, subGraph *SubGraph, root *sitter.Node, level int) {
