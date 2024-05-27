@@ -133,6 +133,7 @@ func (r *Room) Join(s *melody.Session) {
 			r.forceSend(system.Name, s, ws.AddLink, v)
 		}
 		r.forceSend(system.Name, s, ws.SetComment, system.Comment.String())
+		r.forceSend(system.Name, s, ws.SetTerraform, system.Terraform.String())
 	}
 	r.forceSend("", s, ws.Mermaid, r.CurrentDiagram(""))
 }
@@ -256,7 +257,7 @@ func (r *Room) SetNodePosition(ds string, id string, x int, y int) {
 func (r *Room) AppendComment(ds, s string) {
 	system := r.System(ds)
 	system.Comment.WriteString(s)
-	if system.Comment.String() != "" {
+	if system.Comment.Len() > 0 {
 		r.broadCast(ds, ws.SetComment, system.Comment.String())
 	}
 }
