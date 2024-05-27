@@ -83,6 +83,10 @@ func (r *receptionist) Work() {
 
 	})
 	r.ws.HandleMessage(func(s *melody.Session, msg []byte) {
+		if string(msg) == "PING" {
+			s.Write([]byte("PONG"))
+			return
+		}
 		uid := ws.GetUID(s)
 		var data ws.Data
 		if err := json.Unmarshal(msg, &data); err != nil {
