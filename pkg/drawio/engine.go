@@ -17,6 +17,9 @@ type Event struct {
 }
 
 func init() {
+	//playwright.Install(&playwright.RunOptions{
+	//	Browsers: []string{"chromium"},
+	//})
 	var err error
 	path, err = filepath.Abs("./pkg/drawio/browser/index.html")
 	if err != nil {
