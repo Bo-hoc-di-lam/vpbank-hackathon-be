@@ -4,6 +4,7 @@ import (
 	"be/pkg/adapter"
 	"be/pkg/common/ws"
 	"be/pkg/config"
+	"be/pkg/drawio"
 	"be/pkg/service"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -19,7 +20,7 @@ func init() {
 	zapConfig := zap.NewDevelopmentConfig()
 	zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	l, _ := zapConfig.Build()
-
+	drawio.Init("./pkg/drawio/browser/index.html")
 	zap.ReplaceGlobals(l)
 }
 

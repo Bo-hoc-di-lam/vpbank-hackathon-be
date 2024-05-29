@@ -37,6 +37,7 @@ graph TD
 `
 
 func TestDownload(t *testing.T) {
+	Init("./browser/index.html")
 	data, err := Generate(example)
 	assert.NoError(t, err)
 	fmt.Println(string(data))

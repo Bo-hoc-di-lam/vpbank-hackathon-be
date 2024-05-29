@@ -10,22 +10,19 @@ import (
 )
 
 var b playwright.Browser
-var path string
+var htmlPath string
 
 type Event struct {
 	Event string `json:"event"`
 }
 
-func init() {
-	//playwright.Install(&playwright.RunOptions{
-	//	Browsers: []string{"chromium"},
-	//})
+func Init(path string) {
 	var err error
-	path, err = filepath.Abs("./pkg/drawio/browser/index.html")
+	htmlPath, err = filepath.Abs(path)
 	if err != nil {
 		panic(err)
 	}
-	path = "file://" + path
+	htmlPath = "file://" + htmlPath
 	pw, err := playwright.Run(&playwright.RunOptions{
 		SkipInstallBrowsers: true,
 		Browsers:            []string{"chromium"},
@@ -122,7 +119,7 @@ func Generate(diagram string) ([]byte, error) {
 
 		return nil
 	})
-	_, err = p.Goto(path)
+	_, err = p.Goto(htmlPath)
 	if err != nil {
 		return nil, err
 	}
