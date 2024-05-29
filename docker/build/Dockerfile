@@ -17,4 +17,5 @@ RUN make build
 
 EXPOSE 8080
 
+ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
 CMD ["./bin/api"]

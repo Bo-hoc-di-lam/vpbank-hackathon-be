@@ -14,4 +14,5 @@ RUN playwright install --with-deps chrome
 
 COPY ../.. .
 
+ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
 CMD ["make", "test"]
