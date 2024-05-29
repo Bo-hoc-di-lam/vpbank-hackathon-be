@@ -6,7 +6,10 @@ COPY go.mod go.sum ./
 
 RUN go mod download && go mod verify
 
-RUN go run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps chrome --force
+RUN PWGO_VER=$(grep -oE "playwright-go v\S+" ./go.mod | sed 's/playwright-go //g') \
+    && go install github.com/playwright-community/playwright-go/cmd/playwright@${PWGO_VER}
+
+RUN playwright install --with-deps chrome
 
 COPY . .
 
