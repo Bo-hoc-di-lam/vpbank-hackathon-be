@@ -2,23 +2,25 @@ package main
 
 import (
 	"be/pkg/adapter"
+	"be/pkg/common/ws"
 	"be/pkg/config"
+	"be/pkg/drawio"
 	"be/pkg/service"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/samber/do"
-	"net/http"
-
 	"github.com/olahol/melody"
+	"github.com/samber/do"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"net/http"
+	"time"
 )
 
 func init() {
 	zapConfig := zap.NewDevelopmentConfig()
 	zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	l, _ := zapConfig.Build()
-
+	drawio.Init("./pkg/drawio/browser/index.html")
 	zap.ReplaceGlobals(l)
 }
 
@@ -30,10 +32,24 @@ func main() {
 	adapter.Inject(di)
 
 	m := melody.New()
-	do.ProvideValue(di, m)
+
+	m.Config = &melody.Config{
+		WriteWait:                 time.Hour,
+		PongWait:                  time.Hour,
+		PingPeriod:                time.Hour,
+		MaxMessageSize:            1024,
+		MessageBufferSize:         1024,
+		ConcurrentMessageHandling: true,
+	}
+	m.HandleError(func(session *melody.Session, err error) {
+		uid := ws.GetUID(session)
+		zap.S().Errorw("error when handle ws request", "uid", uid, "error", err)
+	})
+
 	m.Upgrader.CheckOrigin = func(r *http.Request) bool {
 		return true
 	}
+	do.ProvideValue(di, m)
 
 	e := echo.New()
 	e.Use(middleware.Recover())

@@ -2,9 +2,11 @@ package engine
 
 import (
 	"be/pkg/common/ws"
+	"be/pkg/drawio"
 	"be/pkg/parser/mermaid"
 	"be/pkg/util"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/olahol/melody"
 	sitter "github.com/smacker/go-tree-sitter"
@@ -69,6 +71,7 @@ type Room struct {
 	// parser info
 	parser  *sitter.Parser
 	systems map[string]*System
+	DrawIO  string
 }
 
 func NewRoom(id string) *Room {
@@ -300,6 +303,26 @@ func (r *Room) CurrentDiagram(ds string) string {
 	return string(system.Content)
 }
 
+func (r *Room) GenerateDrawIO() error {
+	d := r.CurrentDiagram("")
+	if d == "" {
+		return errors.New("empty diagram")
+	}
+	diagram, err := drawio.Generate(d)
+	if err != nil {
+		return err
+	}
+	r.DrawIO = string(diagram)
+	drawIO := r.DrawIO
+	for len(drawIO) > 0 {
+		mx := min(MaxMsgLength, len(drawIO))
+		r.BroadCast(ws.SetDrawIO, drawIO[:mx])
+		drawIO = drawIO[mx:]
+	}
+
+	return nil
+}
+
 func (r *Room) Append(ctx context.Context, ds string, s string) {
 	system := r.System(ds)
 	system.Content = append(system.Content, []byte(s)...)
@@ -411,6 +434,7 @@ func (r *Room) Flush(ctx context.Context, ds string) {
 		r.broadCast(ds, ws.SetComment, system.CommentBuffer[:mx])
 		system.CommentBuffer = system.CommentBuffer[mx:]
 	}
+	r.broadCast(ds, ws.Mermaid, string(system.Content))
 }
 
 func (r *Room) FlushTerraform(ds string) {

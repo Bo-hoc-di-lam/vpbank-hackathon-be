@@ -153,8 +153,28 @@ func (r *receptionist) Work() {
 			}
 			zap.S().Infow("user asked to join room", "uid", uid, "nameplate", nameplate)
 			r.HandleJoinRoom(s, nameplate)
+		case ws.GenDrawIO:
+			zap.S().Infow("user asked to generate drawio", "uid", uid)
+			r.GenerateDrawIO(s)
 		}
+
 	})
+}
+
+func (r *receptionist) GenerateDrawIO(s *melody.Session) {
+	uid := ws.GetUID(s)
+	room, err := r.office.GetRoomForUser(s)
+	if err != nil {
+		zap.S().Errorw("error when get room", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	if err := room.GenerateDrawIO(); err != nil {
+		zap.S().Errorw("error when generate drawio", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+
 }
 
 func (r *receptionist) HandleGenerateCode(ds string, s *melody.Session) {
@@ -166,6 +186,10 @@ func (r *receptionist) HandleGenerateCode(ds string, s *melody.Session) {
 		return
 	}
 	diagram := room.CurrentDiagram(ds)
+	if diagram == "" {
+		ws.ForceSend(s, ws.Error, "please generate aws diagram first")
+		return
+	}
 	stream, err := r.ai.GenCode(diagram)
 	if err != nil {
 		zap.S().Errorw("error when gen code", "uid", uid, "error", err)
