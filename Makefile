@@ -7,5 +7,5 @@ run:
 	GOOS=linux GOARCH=amd64 go run cmd/api/main.go
 
 test:
-	go test -c . -v ./...
+	GOOS=linux GOARCH=amd64 go test -v ./...
 
