@@ -23,7 +23,10 @@ func init() {
 		panic(err)
 	}
 	path = "file://" + path
-	pw, err := playwright.Run()
+	pw, err := playwright.Run(&playwright.RunOptions{
+		SkipInstallBrowsers: true,
+		Browsers:            []string{"chromium"},
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -45,7 +48,7 @@ func Generate(diagram string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := time.NewTicker(10 * time.Second)
+	t := time.NewTicker(30 * time.Second)
 	c := make(chan struct{})
 	errChan := make(chan error)
 	defer func() {
