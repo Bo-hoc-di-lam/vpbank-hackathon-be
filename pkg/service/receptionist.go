@@ -17,6 +17,7 @@ import (
 
 type Receptionist interface {
 	Work()
+	RoomInfo(nameplate string) (any, error)
 }
 
 type receptionist struct {
@@ -41,6 +42,14 @@ func NewReceptionist(di *do.Injector) (Receptionist, error) {
 		office: engine.NewOffice(),
 	}
 	return s, nil
+}
+
+func (r *receptionist) RoomInfo(nameplate string) (any, error) {
+	room, err := r.office.GetRoom(nameplate)
+	if err != nil {
+		return nil, err
+	}
+	return room, nil
 }
 
 func (r *receptionist) Work() {
@@ -146,7 +155,9 @@ func (r *receptionist) Work() {
 			}
 			zap.S().Infow("user asked to edit diagram", "uid", uid, "data", dto)
 			r.HandlePromptEdit(s, dto)
-
+		case ws.GenAnsible:
+			zap.S().Infow("user asked to generate ansible", "uid", uid)
+			r.HandleGenerateAnsible(s)
 		case ws.JoinRoom:
 			nameplate, ok := data.Data.(string)
 			if !ok {
@@ -176,6 +187,47 @@ func (r *receptionist) GenerateDrawIO(s *melody.Session) {
 		return
 	}
 
+}
+
+func (r *receptionist) HandleGenerateAnsible(s *melody.Session) {
+	ds := ws.DiagramAWS
+	uid := ws.GetUID(s)
+	room, err := r.office.GetRoomForUser(s)
+	if err != nil {
+		zap.S().Errorw("error when get room", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	diagram := room.CurrentDiagram(ds)
+	if diagram == "" {
+		ws.ForceSend(s, ws.Error, "please generate aws diagram first")
+		return
+	}
+	terraform := room.CurrentTerraform(ds)
+	if terraform == "" {
+		ws.ForceSend(s, ws.Error, "please generate terraform first")
+		return
+	}
+	stream, err := r.ai.GenAnsible(terraform, diagram)
+	if err != nil {
+		zap.S().Errorw("error when gen ansible", "uid", uid, "error", err)
+		ws.ForceSend(s, ws.Error, err.Error())
+		return
+	}
+	defer stream.Close()
+	room.ResetAnsible(ds)
+	room.Lock()
+	defer room.Unlock()
+	stream.Each(func(data ai_core.Data) error {
+		if data.Output != "" {
+			room.AppendAnsible(ds, data.Output)
+		}
+		if data.Comments != "" {
+			room.AppendComment(ds, data.Comments)
+		}
+		return nil
+	})
+	room.FlushAnsible(ds)
 }
 
 func (r *receptionist) HandleGenerateCode(ds ws.DiagramSystem, s *melody.Session) {
@@ -279,7 +331,6 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 	defer stream.Close()
 	room.Reset("")
 	room.Lock()
-	defer func() { room.BroadCast(ws.Mermaid, room.CurrentDiagram("")) }()
 	defer room.Unlock()
 	stream.Each(func(data ai_core.Data) error {
 		if data.Output != "" {
@@ -315,7 +366,6 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 	defer stream.Close()
 	room.Reset("")
 	room.Lock()
-	defer func() { room.BroadCast(ws.Mermaid, room.CurrentDiagram("")) }()
 	defer room.Unlock()
 	stream.Each(func(data ai_core.Data) error {
 		if data.Output != "" {
