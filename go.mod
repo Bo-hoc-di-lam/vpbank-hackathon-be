@@ -8,6 +8,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/labstack/echo/v4 v4.12.0
 	github.com/olahol/melody v1.2.1
+	github.com/playwright-community/playwright-go v0.4201.1
 	github.com/samber/do v1.6.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240514083259-c5d1f3f5f99e
 	github.com/stretchr/testify v1.9.0
@@ -24,7 +25,6 @@ require (
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/playwright-community/playwright-go v0.4201.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect

@@ -5,6 +5,7 @@ import (
 	"be/pkg/common/ws"
 	"be/pkg/engine"
 	"be/pkg/util"
+	"be/pkg/util/agg"
 	"context"
 	"encoding/json"
 	"github.com/google/uuid"
@@ -177,7 +178,7 @@ func (r *receptionist) GenerateDrawIO(s *melody.Session) {
 
 }
 
-func (r *receptionist) HandleGenerateCode(ds string, s *melody.Session) {
+func (r *receptionist) HandleGenerateCode(ds ws.DiagramSystem, s *melody.Session) {
 	uid := ws.GetUID(s)
 	room, err := r.office.GetRoomForUser(s)
 	if err != nil {
@@ -220,7 +221,7 @@ func (r *receptionist) HandleJoinRoom(s *melody.Session, nameplate string) {
 	room.Join(s)
 }
 
-func (r *receptionist) HandleGenIcon(ds string, s *melody.Session) {
+func (r *receptionist) HandleGenIcon(ds ws.DiagramSystem, s *melody.Session) {
 	ctx := context.Background()
 	uid := ws.GetUID(s)
 	room, err := r.office.GetRoomForUser(s)
@@ -267,7 +268,9 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 		return
 	}
 	diagram := room.CurrentDiagram("")
-	stream, err := r.ai.Edit(data.Input, diagram, data.EditNodes)
+	stream, err := r.ai.Edit(data.Input, diagram, agg.Map(data.EditNodes, func(item ws.EditNode) ai_core.EditNode {
+		return (ai_core.EditNode)(item)
+	}))
 	if err != nil {
 		zap.S().Errorw("error when edit", "uid", uid, "error", err)
 		ws.ForceSend(s, ws.Error, err.Error())
