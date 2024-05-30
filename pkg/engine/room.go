@@ -34,26 +34,28 @@ func EmptyData() *Data {
 }
 
 type DataSet struct {
-	Old *Data
-	New *Data
+	Old *Data `json:"old"`
+	New *Data `json:"new"`
 }
 
 type System struct {
 	Terraform       strings.Builder `json:"terraform"`
-	TerraformBuffer string
+	terraformBuffer string
+	Ansible         strings.Builder `json:"ansible"`
+	ansibleBuffer   string
 	Name            ws.DiagramSystem
-	Tree            *sitter.Tree
-	Content         []byte
+	tree            *sitter.Tree
+	Content         []byte `json:"content"`
 	Comment         strings.Builder
-	CommentBuffer   string
-	Data            DataSet
-	BufferCnt       int
+	commentBuffer   string
+	Data            DataSet `json:"data"`
+	bufferCnt       int
 }
 
 func NewGraphSystem(name ws.DiagramSystem) *System {
 	return &System{
 		Name:    name,
-		Tree:    nil,
+		tree:    nil,
 		Content: nil,
 		Comment: strings.Builder{},
 		Data:    DataSet{Old: EmptyData(), New: EmptyData()},
@@ -65,13 +67,13 @@ type Room struct {
 	mu sync.RWMutex
 
 	// info
-	Nameplate string
+	Nameplate string `json:"nameplate"`
 	seat      map[string]*melody.Session
 
 	// parser info
 	parser  *sitter.Parser
-	systems map[ws.DiagramSystem]*System
-	DrawIO  string
+	Systems map[ws.DiagramSystem]*System `json:"systems"`
+	DrawIO  string                       `json:"draw_io"`
 }
 
 func NewRoom(id string) *Room {
@@ -81,7 +83,7 @@ func NewRoom(id string) *Room {
 		Nameplate: id,
 		seat:      make(map[string]*melody.Session),
 		parser:    p,
-		systems: map[ws.DiagramSystem]*System{
+		Systems: map[ws.DiagramSystem]*System{
 			ws.DiagramNormal: NewGraphSystem(""),
 		},
 	}
@@ -90,10 +92,10 @@ func NewRoom(id string) *Room {
 // session logic
 
 func (r *Room) System(name ws.DiagramSystem) *System {
-	if r.systems[name] == nil {
-		r.systems[name] = NewGraphSystem(name)
+	if r.Systems[name] == nil {
+		r.Systems[name] = NewGraphSystem(name)
 	}
-	return r.systems[name]
+	return r.Systems[name]
 }
 
 func (r *Room) BroadCast(event ws.Event, data any) {
@@ -184,7 +186,19 @@ func (r *Room) ResetTerraform(ds ws.DiagramSystem) {
 	defer r.Unlock()
 	system := r.System(ds)
 	system.Terraform.Reset()
-	system.TerraformBuffer = ""
+	system.terraformBuffer = ""
+	system.commentBuffer = ""
+	system.Comment.Reset()
+}
+
+func (r *Room) ResetAnsible(ds ws.DiagramSystem) {
+	r.Lock()
+	defer r.Unlock()
+	system := r.System(ds)
+	system.Ansible.Reset()
+	system.ansibleBuffer = ""
+	system.commentBuffer = ""
+	system.Comment.Reset()
 }
 
 func (r *Room) Reset(ds ws.DiagramSystem) {
@@ -193,10 +207,10 @@ func (r *Room) Reset(ds ws.DiagramSystem) {
 	system := r.System(ds)
 	system.Terraform.Reset()
 	system.Content = []byte{}
-	system.TerraformBuffer = ""
+	system.terraformBuffer = ""
 	system.Comment.Reset()
-	system.CommentBuffer = ""
-	system.BufferCnt = 0
+	system.commentBuffer = ""
+	system.bufferCnt = 0
 	system.Data = DataSet{
 		Old: EmptyData(),
 		New: EmptyData(),
@@ -228,10 +242,10 @@ func (r *Room) compareData(system *System) {
 		for _, v := range mpDel {
 			r.broadCast(system.Name, ws.DelSubGraph, v)
 		}
-		for len(system.CommentBuffer) > MaxMsgLength {
-			mx := min(MaxMsgLength, len(system.CommentBuffer))
-			r.broadCast(system.Name, ws.SetComment, system.CommentBuffer[:mx])
-			system.CommentBuffer = system.CommentBuffer[mx:]
+		for len(system.commentBuffer) > MaxMsgLength {
+			mx := min(MaxMsgLength, len(system.commentBuffer))
+			r.broadCast(system.Name, ws.SetComment, system.commentBuffer[:mx])
+			system.commentBuffer = system.commentBuffer[mx:]
 		}
 	}
 
@@ -289,23 +303,39 @@ func (r *Room) SetNodePosition(ds ws.DiagramSystem, id string, x int, y int) {
 func (r *Room) AppendComment(ds ws.DiagramSystem, s string) {
 	system := r.System(ds)
 	system.Comment.WriteString(s)
-	system.CommentBuffer += s
-	for len(system.CommentBuffer) > MaxMsgLength {
-		mx := min(MaxMsgLength, len(system.CommentBuffer))
-		r.broadCast(ds, ws.SetComment, system.CommentBuffer[:mx])
-		system.CommentBuffer = system.CommentBuffer[mx:]
+	system.commentBuffer += s
+	for len(system.commentBuffer) > MaxMsgLength {
+		mx := min(MaxMsgLength, len(system.commentBuffer))
+		r.broadCast(ds, ws.SetComment, system.commentBuffer[:mx])
+		system.commentBuffer = system.commentBuffer[mx:]
 	}
 }
 
 func (r *Room) AppendTerraform(ds ws.DiagramSystem, s string) {
 	system := r.System(ds)
 	system.Terraform.WriteString(s)
-	system.TerraformBuffer += s
-	for len(system.TerraformBuffer) > MaxMsgLength {
-		mx := min(MaxMsgLength, len(system.TerraformBuffer))
-		r.broadCast(ds, ws.SetTerraform, system.TerraformBuffer[:mx])
-		system.TerraformBuffer = system.TerraformBuffer[mx:]
+	system.terraformBuffer += s
+	for len(system.terraformBuffer) > MaxMsgLength {
+		mx := min(MaxMsgLength, len(system.terraformBuffer))
+		r.broadCast(ds, ws.SetTerraform, system.terraformBuffer[:mx])
+		system.terraformBuffer = system.terraformBuffer[mx:]
 	}
+}
+
+func (r *Room) AppendAnsible(ds ws.DiagramSystem, s string) {
+	system := r.System(ds)
+	system.Ansible.WriteString(s)
+	system.ansibleBuffer += s
+	for len(system.ansibleBuffer) > MaxMsgLength {
+		mx := min(MaxMsgLength, len(system.ansibleBuffer))
+		r.broadCast(ds, ws.SetAnsible, system.ansibleBuffer[:mx])
+		system.ansibleBuffer = system.ansibleBuffer[mx:]
+	}
+}
+
+func (r *Room) CurrentTerraform(ds ws.DiagramSystem) string {
+	system := r.System(ds)
+	return system.Terraform.String()
 }
 
 func (r *Room) CurrentDiagram(ds ws.DiagramSystem) string {
@@ -336,8 +366,8 @@ func (r *Room) GenerateDrawIO() error {
 func (r *Room) Append(ctx context.Context, ds ws.DiagramSystem, s string) {
 	system := r.System(ds)
 	system.Content = append(system.Content, []byte(s)...)
-	system.BufferCnt++
-	if system.BufferCnt != 0 && system.BufferCnt%BufferFlushThreshold == 0 {
+	system.bufferCnt++
+	if system.bufferCnt != 0 && system.bufferCnt%BufferFlushThreshold == 0 {
 		r.Flush(ctx, ds)
 	}
 }
@@ -427,7 +457,7 @@ func (r *Room) parse(ctx context.Context, system *System) {
 	if err != nil {
 		zap.S().Error("error when parse", "error", err)
 	}
-	system.Tree = tree
+	system.tree = tree
 	r.travel(system, nil, tree.RootNode(), 0)
 	r.compareData(system)
 	system.Data.Old = system.Data.New
@@ -435,24 +465,38 @@ func (r *Room) parse(ctx context.Context, system *System) {
 
 func (r *Room) Flush(ctx context.Context, ds ws.DiagramSystem) {
 	system := r.System(ds)
-	if system.BufferCnt != 0 {
-		system.BufferCnt = 0
+	if system.bufferCnt != 0 {
+		system.bufferCnt = 0
 		r.parse(ctx, system)
 	}
-	for len(system.CommentBuffer) > 0 {
-		mx := min(MaxMsgLength, len(system.CommentBuffer))
-		r.broadCast(ds, ws.SetComment, system.CommentBuffer[:mx])
-		system.CommentBuffer = system.CommentBuffer[mx:]
+	for len(system.commentBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.commentBuffer))
+		r.broadCast(ds, ws.SetComment, system.commentBuffer[:mx])
+		system.commentBuffer = system.commentBuffer[mx:]
 	}
 	r.broadCast(ds, ws.Mermaid, string(system.Content))
 }
 
 func (r *Room) FlushTerraform(ds ws.DiagramSystem) {
 	system := r.System(ds)
-	for len(system.TerraformBuffer) > 0 {
-		mx := min(MaxMsgLength, len(system.TerraformBuffer))
-		r.broadCast(ds, ws.SetTerraform, system.TerraformBuffer[:mx])
-		system.TerraformBuffer = system.TerraformBuffer[mx:]
+	for len(system.terraformBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.terraformBuffer))
+		r.broadCast(ds, ws.SetTerraform, system.terraformBuffer[:mx])
+		system.terraformBuffer = system.terraformBuffer[mx:]
+	}
+}
+
+func (r *Room) FlushAnsible(ds ws.DiagramSystem) {
+	system := r.System(ds)
+	for len(system.ansibleBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.ansibleBuffer))
+		r.broadCast(ds, ws.SetAnsible, system.ansibleBuffer[:mx])
+		system.ansibleBuffer = system.ansibleBuffer[mx:]
+	}
+	for len(system.commentBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.commentBuffer))
+		r.broadCast(ds, ws.SetComment, system.commentBuffer[:mx])
+		system.commentBuffer = system.commentBuffer[mx:]
 	}
 }
 

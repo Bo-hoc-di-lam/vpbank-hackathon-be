@@ -17,6 +17,7 @@ const (
 	JoinRoom   Event = "JOIN_ROOM"
 	GenCode    Event = "GENERATE_CODE"
 	GenDrawIO  Event = "GENERATE_DRAWIO"
+	GenAnsible Event = "GENERATE_ANSIBLE"
 
 	AddNode    Event = "ADD_NODE"
 	DelNode    Event = "DEL_NODE"
@@ -37,4 +38,5 @@ const (
 	SetComment   Event = "SET_COMMENT"
 	SetTerraform Event = "SET_TERRAFORM"
 	SetDrawIO    Event = "SET_DRAWIO"
+	SetAnsible   Event = "SET_ANSIBLE"
 )

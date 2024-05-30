@@ -8,6 +8,11 @@ type GenIconDTO struct {
 	OldDiagram string `json:"old_diagram"`
 }
 
+type AnsibleDTO struct {
+	Terraform  string `json:"terraform"`
+	AWSDiagram string `json:"aws_diagram"`
+}
+
 type EditDTO struct {
 	Input      string     `json:"input"`
 	OldDiagram string     `json:"old_diagram"`
@@ -16,7 +21,7 @@ type EditDTO struct {
 
 type EditNode struct {
 	NodeID string `json:"node_id"`
-	Title string `json:"title"`
+	Title  string `json:"title"`
 }
 
 type Event struct {

@@ -88,5 +88,14 @@ func main() {
 		panic(err)
 	}
 	s.Work()
+	e.GET("/room/:id", func(c echo.Context) error {
+		roomId := c.Param("id")
+		room, err := s.RoomInfo(roomId)
+		if err != nil {
+			return c.JSON(500, err)
+		}
+		return c.JSON(200, room)
+	})
+
 	e.Logger.Fatal(e.Start(":" + do.MustInvoke[config.Server](di).Port))
 }
