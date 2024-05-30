@@ -1,6 +1,7 @@
 package ai_core
 
 import (
+	"be/pkg/common/ws"
 	"be/pkg/config"
 	"bytes"
 	"encoding/json"
@@ -13,7 +14,7 @@ import (
 type Adapter interface {
 	Prompt(data string) (Decoder, error)
 	Edit(prompt string, oldData string, editNode []EditNode) (Decoder, error)
-	GenIcon(ds, diagram string) (Decoder, error)
+	GenIcon(ds ws.DiagramSystem, diagram string) (Decoder, error)
 	GenCode(mermaid string) (Decoder, error)
 }
 
@@ -57,8 +58,8 @@ func (a *adapter) GenCode(mermaid string) (Decoder, error) {
 	return NewDecoder(resp.Body), nil
 }
 
-func (a *adapter) GenIcon(ds string, diagram string) (Decoder, error) {
-	url := fmt.Sprint(a.conf.BaseURL, fmt.Sprintf(a.conf.GenIconEndpoint, strings.ToLower(ds)))
+func (a *adapter) GenIcon(ds ws.DiagramSystem, diagram string) (Decoder, error) {
+	url := fmt.Sprint(a.conf.BaseURL, fmt.Sprintf(a.conf.GenIconEndpoint, strings.ToLower(string(ds))))
 	body, err := json.Marshal(InputWrap[GenIconDTO]{
 		GenIconDTO{
 			OldDiagram: diagram,

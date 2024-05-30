@@ -41,7 +41,7 @@ type DataSet struct {
 type System struct {
 	Terraform       strings.Builder `json:"terraform"`
 	TerraformBuffer string
-	Name            string
+	Name            ws.DiagramSystem
 	Tree            *sitter.Tree
 	Content         []byte
 	Comment         strings.Builder
@@ -50,7 +50,7 @@ type System struct {
 	BufferCnt       int
 }
 
-func NewGraphSystem(name string) *System {
+func NewGraphSystem(name ws.DiagramSystem) *System {
 	return &System{
 		Name:    name,
 		Tree:    nil,
@@ -70,7 +70,7 @@ type Room struct {
 
 	// parser info
 	parser  *sitter.Parser
-	systems map[string]*System
+	systems map[ws.DiagramSystem]*System
 	DrawIO  string
 }
 
@@ -81,15 +81,15 @@ func NewRoom(id string) *Room {
 		Nameplate: id,
 		seat:      make(map[string]*melody.Session),
 		parser:    p,
-		systems: map[string]*System{
-			"": NewGraphSystem(""),
+		systems: map[ws.DiagramSystem]*System{
+			ws.DiagramNormal: NewGraphSystem(""),
 		},
 	}
 }
 
 // session logic
 
-func (r *Room) System(name string) *System {
+func (r *Room) System(name ws.DiagramSystem) *System {
 	if r.systems[name] == nil {
 		r.systems[name] = NewGraphSystem(name)
 	}
@@ -134,7 +134,11 @@ func (r *Room) Join(s *melody.Session) {
 	r.seat[uid] = s
 	r.broadCast("", ws.Join, uid)
 
-	for _, system := range r.systems {
+	for _, sName := range ws.DiagramSystems {
+		system := r.System(sName)
+		if system == nil {
+			continue
+		}
 		for _, v := range system.Data.Old.SubGraphs {
 			r.forceSend(system.Name, s, ws.AddSubGraph, v)
 		}
@@ -160,14 +164,14 @@ func (r *Room) Join(s *melody.Session) {
 	r.forceSend("", s, ws.Mermaid, r.CurrentDiagram(""))
 }
 
-func (r *Room) forceSend(ds string, s *melody.Session, event ws.Event, data any) {
+func (r *Room) forceSend(ds ws.DiagramSystem, s *melody.Session, event ws.Event, data any) {
 	if ds != "" {
-		event += ws.Event("_" + strings.ToUpper(ds))
+		event += ws.Event("_" + strings.ToUpper(string(ds)))
 	}
 	ws.ForceSend(s, event, data)
 }
 
-func (r *Room) broadCast(ds string, event ws.Event, data any) {
+func (r *Room) broadCast(ds ws.DiagramSystem, event ws.Event, data any) {
 	for _, s := range r.seat {
 		r.forceSend(ds, s, event, data)
 	}
@@ -175,7 +179,7 @@ func (r *Room) broadCast(ds string, event ws.Event, data any) {
 
 // parser logic
 
-func (r *Room) ResetTerraform(ds string) {
+func (r *Room) ResetTerraform(ds ws.DiagramSystem) {
 	r.Lock()
 	defer r.Unlock()
 	system := r.System(ds)
@@ -183,7 +187,7 @@ func (r *Room) ResetTerraform(ds string) {
 	system.TerraformBuffer = ""
 }
 
-func (r *Room) Reset(ds string) {
+func (r *Room) Reset(ds ws.DiagramSystem) {
 	r.Lock()
 	defer r.Unlock()
 	system := r.System(ds)
@@ -269,7 +273,7 @@ func (r *Room) compareData(system *System) {
 
 }
 
-func (r *Room) SetNodePosition(ds string, id string, x int, y int) {
+func (r *Room) SetNodePosition(ds ws.DiagramSystem, id string, x int, y int) {
 	system := r.System(ds)
 	node := system.Data.Old.Vertices[id]
 	if node == nil {
@@ -282,7 +286,7 @@ func (r *Room) SetNodePosition(ds string, id string, x int, y int) {
 	}
 }
 
-func (r *Room) AppendComment(ds, s string) {
+func (r *Room) AppendComment(ds ws.DiagramSystem, s string) {
 	system := r.System(ds)
 	system.Comment.WriteString(s)
 	system.CommentBuffer += s
@@ -293,7 +297,7 @@ func (r *Room) AppendComment(ds, s string) {
 	}
 }
 
-func (r *Room) AppendTerraform(ds, s string) {
+func (r *Room) AppendTerraform(ds ws.DiagramSystem, s string) {
 	system := r.System(ds)
 	system.Terraform.WriteString(s)
 	system.TerraformBuffer += s
@@ -304,7 +308,7 @@ func (r *Room) AppendTerraform(ds, s string) {
 	}
 }
 
-func (r *Room) CurrentDiagram(ds string) string {
+func (r *Room) CurrentDiagram(ds ws.DiagramSystem) string {
 	system := r.System(ds)
 	return string(system.Content)
 }
@@ -329,7 +333,7 @@ func (r *Room) GenerateDrawIO() error {
 	return nil
 }
 
-func (r *Room) Append(ctx context.Context, ds string, s string) {
+func (r *Room) Append(ctx context.Context, ds ws.DiagramSystem, s string) {
 	system := r.System(ds)
 	system.Content = append(system.Content, []byte(s)...)
 	system.BufferCnt++
@@ -429,7 +433,7 @@ func (r *Room) parse(ctx context.Context, system *System) {
 	system.Data.Old = system.Data.New
 }
 
-func (r *Room) Flush(ctx context.Context, ds string) {
+func (r *Room) Flush(ctx context.Context, ds ws.DiagramSystem) {
 	system := r.System(ds)
 	if system.BufferCnt != 0 {
 		system.BufferCnt = 0
@@ -443,7 +447,7 @@ func (r *Room) Flush(ctx context.Context, ds string) {
 	r.broadCast(ds, ws.Mermaid, string(system.Content))
 }
 
-func (r *Room) FlushTerraform(ds string) {
+func (r *Room) FlushTerraform(ds ws.DiagramSystem) {
 	system := r.System(ds)
 	for len(system.TerraformBuffer) > 0 {
 		mx := min(MaxMsgLength, len(system.TerraformBuffer))

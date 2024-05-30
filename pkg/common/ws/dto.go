@@ -1,7 +1,5 @@
 package ws
 
-import "be/pkg/adapter/ai_core"
-
 type Data struct {
 	Event Event `json:"event"`
 	Data  any   `json:"data"`
@@ -12,10 +10,15 @@ type Connect struct {
 }
 
 type PromptDTO struct {
-	Input     string             `json:"input"`
-	EditNodes []ai_core.EditNode `json:"edit_nodes,omitempty"`
+	Input     string     `json:"input"`
+	EditNodes []EditNode `json:"edit_nodes,omitempty"`
+}
+
+type EditNode struct {
+	NodeID string `json:"node_id"`
+	Title  string `json:"title"`
 }
 
 type SystemTypeDTO struct {
-	Type string `json:"type"`
+	Type DiagramSystem `json:"type"`
 }
