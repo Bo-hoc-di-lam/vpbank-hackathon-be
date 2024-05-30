@@ -46,10 +46,11 @@ type System struct {
 	Name            ws.DiagramSystem
 	tree            *sitter.Tree
 	Content         []byte `json:"content"`
+	contentBuffer   string
+	bufferCnt       int
 	Comment         strings.Builder
 	commentBuffer   string
 	Data            DataSet `json:"data"`
-	bufferCnt       int
 }
 
 func NewGraphSystem(name ws.DiagramSystem) *System {
@@ -162,8 +163,19 @@ func (r *Room) Join(s *melody.Session) {
 			r.forceSend(system.Name, s, ws.SetTerraform, buf[:mx])
 			buf = buf[mx:]
 		}
+		buf = string(system.Content)
+		for len(buf) > 0 {
+			mx := min(MaxMsgLength, len(buf))
+			r.forceSend(system.Name, s, ws.Mermaid, buf[:mx])
+			buf = buf[mx:]
+		}
+		buf = system.Ansible.String()
+		for len(buf) > 0 {
+			mx := min(MaxMsgLength, len(buf))
+			r.forceSend(system.Name, s, ws.SetAnsible, buf[:mx])
+			buf = buf[mx:]
+		}
 	}
-	r.forceSend("", s, ws.Mermaid, r.CurrentDiagram(""))
 }
 
 func (r *Room) forceSend(ds ws.DiagramSystem, s *melody.Session, event ws.Event, data any) {
@@ -210,6 +222,9 @@ func (r *Room) Reset(ds ws.DiagramSystem) {
 	system.terraformBuffer = ""
 	system.Comment.Reset()
 	system.commentBuffer = ""
+	system.contentBuffer = ""
+	system.Ansible.Reset()
+	system.ansibleBuffer = ""
 	system.bufferCnt = 0
 	system.Data = DataSet{
 		Old: EmptyData(),
@@ -366,6 +381,12 @@ func (r *Room) GenerateDrawIO() error {
 func (r *Room) Append(ctx context.Context, ds ws.DiagramSystem, s string) {
 	system := r.System(ds)
 	system.Content = append(system.Content, []byte(s)...)
+	system.contentBuffer += s
+	for len(system.contentBuffer) > MaxMsgLength {
+		mx := min(MaxMsgLength, len(system.contentBuffer))
+		r.broadCast(ds, ws.Mermaid, system.contentBuffer[:mx])
+		system.contentBuffer = system.contentBuffer[mx:]
+	}
 	system.bufferCnt++
 	if system.bufferCnt != 0 && system.bufferCnt%BufferFlushThreshold == 0 {
 		r.Flush(ctx, ds)
@@ -474,7 +495,12 @@ func (r *Room) Flush(ctx context.Context, ds ws.DiagramSystem) {
 		r.broadCast(ds, ws.SetComment, system.commentBuffer[:mx])
 		system.commentBuffer = system.commentBuffer[mx:]
 	}
-	r.broadCast(ds, ws.Mermaid, string(system.Content))
+	for len(system.contentBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.contentBuffer))
+		r.broadCast(ds, ws.Mermaid, system.contentBuffer[:mx])
+		system.contentBuffer = system.contentBuffer[mx:]
+	}
+
 }
 
 func (r *Room) FlushTerraform(ds ws.DiagramSystem) {

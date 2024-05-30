@@ -331,7 +331,6 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 	defer stream.Close()
 	room.Reset("")
 	room.Lock()
-	defer func() { room.BroadCast(ws.Mermaid, room.CurrentDiagram("")) }()
 	defer room.Unlock()
 	stream.Each(func(data ai_core.Data) error {
 		if data.Output != "" {
@@ -367,7 +366,6 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 	defer stream.Close()
 	room.Reset("")
 	room.Lock()
-	defer func() { room.BroadCast(ws.Mermaid, room.CurrentDiagram("")) }()
 	defer room.Unlock()
 	stream.Each(func(data ai_core.Data) error {
 		if data.Output != "" {
