@@ -120,13 +120,19 @@ func (r *Room) Join(s *melody.Session) {
 	defer r.Unlock()
 
 	uid := ws.GetUID(s)
-	r.seat[uid] = s
+	_, old := r.seat[uid]
 	ws.SetNameplate(s, r.Nameplate)
-	zap.S().Infow("user joined room", "uid", uid, "nameplate", r.Nameplate)
-	r.broadCast("", ws.Join, uid)
-
 	// room info
 	ws.ForceSend(s, ws.RoomInfo, r.Nameplate)
+
+	if !old {
+		for existedUID := range r.seat {
+			ws.ForceSend(s, ws.Join, existedUID)
+		}
+	}
+	zap.S().Infow("user joined room", "uid", uid, "nameplate", r.Nameplate)
+	r.seat[uid] = s
+	r.broadCast("", ws.Join, uid)
 
 	for _, system := range r.systems {
 		for _, v := range system.Data.Old.SubGraphs {

@@ -48,7 +48,7 @@ func Generate(diagram string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := time.NewTicker(30 * time.Second)
+	t := time.NewTicker(10 * time.Second)
 	c := make(chan struct{})
 	errChan := make(chan error)
 	defer func() {
