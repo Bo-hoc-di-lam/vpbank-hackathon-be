@@ -290,9 +290,9 @@ func (r *receptionist) HandleGenIcon(ds ws.DiagramSystem, s *melody.Session) {
 		return
 	}
 	defer stream.Close()
-	room.Reset(ds)
 	room.Lock()
 	defer room.Unlock()
+	room.Reset(ds)
 	stream.Each(func(data ai_core.Data) error {
 		if data.Output != "" {
 			room.Append(ctx, ds, data.Output)
@@ -329,16 +329,23 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 		return
 	}
 	defer stream.Close()
-	room.Reset("")
 	room.Lock()
 	defer room.Unlock()
+	room.ResetComment("")
+	t := ai_core.RAsk
 	stream.Each(func(data ai_core.Data) error {
-		if data.Output != "" {
-			room.Append(ctx, "", data.Output)
+		if data.Type == ai_core.RModify {
+			room.Reset("")
+			t = ai_core.RModify
 		}
-		if len(data.Positions) > 0 {
-			for k, v := range data.Positions {
-				room.SetNodePosition("", k, v[0], v[1])
+		if t == ai_core.RModify {
+			if data.Output != "" {
+				room.Append(ctx, "", data.Output)
+			}
+			if len(data.Positions) > 0 {
+				for k, v := range data.Positions {
+					room.SetNodePosition("", k, v[0], v[1])
+				}
 			}
 		}
 		if data.Comments != "" {
@@ -346,7 +353,11 @@ func (r *receptionist) HandlePromptEdit(s *melody.Session, data ws.PromptDTO) {
 		}
 		return nil
 	})
-	room.Flush(ctx, "")
+	if t == ai_core.RAsk {
+		room.FlushComment("")
+	} else {
+		room.Flush(ctx, "")
+	}
 }
 
 func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
@@ -364,9 +375,9 @@ func (r *receptionist) HandleQuestion(s *melody.Session, prompt string) {
 		return
 	}
 	defer stream.Close()
-	room.Reset("")
 	room.Lock()
 	defer room.Unlock()
+	room.Reset("")
 	stream.Each(func(data ai_core.Data) error {
 		if data.Output != "" {
 			room.Append(ctx, "", data.Output)

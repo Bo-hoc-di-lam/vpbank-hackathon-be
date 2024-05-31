@@ -29,7 +29,15 @@ type Event struct {
 	Data  Data   `json:"data"`
 }
 
+type ResponseType string
+
+const (
+	RAsk    = "ask"
+	RModify = "modify"
+)
+
 type Data struct {
+	Type      ResponseType      `json:"type"`
 	Output    string            `json:"output"`
 	Positions map[string][2]int `json:"positions"`
 	Comments  string            `json:"comments"`

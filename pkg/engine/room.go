@@ -213,9 +213,13 @@ func (r *Room) ResetAnsible(ds ws.DiagramSystem) {
 	system.Comment.Reset()
 }
 
+func (r *Room) ResetComment(ds ws.DiagramSystem) {
+	system := r.System(ds)
+	system.Comment.Reset()
+	system.commentBuffer = ""
+}
+
 func (r *Room) Reset(ds ws.DiagramSystem) {
-	r.Lock()
-	defer r.Unlock()
 	system := r.System(ds)
 	system.Terraform.Reset()
 	system.Content = []byte{}
@@ -482,6 +486,15 @@ func (r *Room) parse(ctx context.Context, system *System) {
 	r.travel(system, nil, tree.RootNode(), 0)
 	r.compareData(system)
 	system.Data.Old = system.Data.New
+}
+
+func (r *Room) FlushComment(ds ws.DiagramSystem) {
+	system := r.System(ds)
+	for len(system.commentBuffer) > 0 {
+		mx := min(MaxMsgLength, len(system.commentBuffer))
+		r.broadCast(ds, ws.SetComment, system.commentBuffer[:mx])
+		system.commentBuffer = system.commentBuffer[mx:]
+	}
 }
 
 func (r *Room) Flush(ctx context.Context, ds ws.DiagramSystem) {
