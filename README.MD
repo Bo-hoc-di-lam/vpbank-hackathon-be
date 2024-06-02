@@ -5,10 +5,10 @@
 **Main features**
 
 - Utilizes ChatGPT 4 to turn user's ideas into architecture design diagrams
-- Ability to create, edit, explain and manage architecture design diagrams
+- Ability to create, edit, explain, and manage architecture design diagrams
 - Export diagram to various diagram formats (Mermaid, DrawIO)
 - Generate code snippets from architecture design diagrams (Terraform, Ansible)
-- Ability to handle multiple user use same diagram at the same time
+- Ability to handle multiple user using same diagram at the same time
 
 ![Overview 1](./images/aws.png)
 ![Overview 2](./images/terraform.png)
